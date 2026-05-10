@@ -74,38 +74,43 @@ const Modal = ({ isOpen, onClose, title, children }) => {
 
 export default function WAsistApp() {
   const [firebaseUser, setFirebaseUser] = useState(null);
-  const [appUser, setAppUser] = useState(null); 
+  
+  // FIX: Membaca Sesi Login dari Session Storage pada awal muat halaman
+  const [appUser, setAppUser] = useState(() => {
+    const savedSession = typeof window !== 'undefined' ? sessionStorage.getItem('wasist_auth') : null;
+    if (savedSession === 'admin') return { role: 'admin', name: 'Super Admin' };
+    return null;
+  }); 
+
   const [allUsers, setAllUsers] = useState([]);
   const [allLeads, setAllLeads] = useState([]);
   
   const [authView, setAuthView] = useState('login'); 
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
-  const [successMsg, setSuccessMsg] = useState(''); // State untuk pesan sukses (seperti Lupa Password)
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [successMsg, setSuccessMsg] = useState('');
+  
+  // FIX: Menyimpan status Tab terakhir yang dibuka
+  const [activeTab, setActiveTab] = useState(() => {
+    return (typeof window !== 'undefined' ? sessionStorage.getItem('wasist_tab') : null) || 'dashboard';
+  });
   
   const [adminViewingUser, setAdminViewingUser] = useState(null);
 
-  // Fitur Keamanan: Captcha Login State
   const [captcha, setCaptcha] = useState({ n1: 0, n2: 0 });
-
-  // Fitur Keamanan: Konfirmasi Logout State
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
-  // Fitur Grafik: Filter Admin Chart
   const [chartFilter, setChartFilter] = useState('7d');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
 
   const currentUserData = adminViewingUser || appUser || {};
   
-  // SEMUA HOOKS (useMemo, useEffect) HARUS DI LEVEL TERATAS COMPONENT (TIDAK BOLEH DI DALAM IF)
   const userLeads = useMemo(() => {
     if (!currentUserData.id) return [];
     return allLeads.filter(l => l.userId === currentUserData.id);
   }, [allLeads, currentUserData.id]);
 
-  // Hook untuk Kalkulasi Grafik Admin (Diangkat ke level teratas untuk menghindari Crash Rules of Hooks)
   const approvedUsers = useMemo(() => allUsers.filter(u => u.status === 'approved'), [allUsers]);
   
   const filteredChartUsers = useMemo(() => {
@@ -135,6 +140,11 @@ export default function WAsistApp() {
     }));
   }, [filteredChartUsers]);
 
+  // Efek untuk menyimpan activeTab ke Session Storage saat terjadi perubahan
+  useEffect(() => {
+    if (activeTab) sessionStorage.setItem('wasist_tab', activeTab);
+  }, [activeTab]);
+
   useEffect(() => {
     const initAuth = async () => {
       try {
@@ -159,6 +169,29 @@ export default function WAsistApp() {
     const unsubUsers = onSnapshot(usersRef, (snapshot) => {
       const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setAllUsers(usersData);
+
+      // FIX: Sinkronisasi dan Pemulihan Akun secara Otomatis dari Firestore jika Sesi tersimpan
+      const savedAuth = sessionStorage.getItem('wasist_auth');
+      if (savedAuth && savedAuth !== 'admin') {
+        const foundUser = usersData.find(u => u.id === savedAuth);
+        if (foundUser) {
+          setAppUser(prevUser => {
+            // Hanya update state jika ada perubahan data (mencegah re-render layar berkedip)
+            if (!prevUser || JSON.stringify(prevUser) !== JSON.stringify(foundUser)) {
+              return foundUser;
+            }
+            return prevUser;
+          });
+          // Arahkan otomatis ke halaman pembayaran jika masih pending
+          if (foundUser.status === 'pending') {
+            setAuthView('payment');
+          }
+        } else {
+          // Bersihkan sesi jika data pengguna telah dihapus dari sistem
+          sessionStorage.removeItem('wasist_auth');
+          setAppUser(null);
+        }
+      }
     }, (err) => console.error(err));
 
     const unsubLeads = onSnapshot(leadsRef, (snapshot) => {
@@ -176,7 +209,6 @@ export default function WAsistApp() {
     };
   }, [firebaseUser]);
 
-  // Generate Captcha on Login Mount
   useEffect(() => {
     if (authView === 'login') {
       setCaptcha({ n1: Math.floor(Math.random() * 10) + 1, n2: Math.floor(Math.random() * 10) + 1 });
@@ -231,7 +263,9 @@ export default function WAsistApp() {
       }).catch(err => console.log("FormSubmit silent fail:", err));
 
       setAuthView('payment');
-      setAppUser({ ...newUser, id: newUserId, pendingPayment: true });
+      const createdUser = { ...newUser, id: newUserId };
+      setAppUser(createdUser);
+      sessionStorage.setItem('wasist_auth', newUserId); // Simpan Sesi
     } catch (err) {
       setErrorMsg('Terjadi kesalahan sistem. Coba lagi.');
       submitBtn.disabled = false;
@@ -245,7 +279,6 @@ export default function WAsistApp() {
     setSuccessMsg('');
     const form = e.target;
     
-    // Fitur Keamanan: Validasi Captcha
     const captchaInput = parseInt(form.captcha.value);
     if (captchaInput !== captcha.n1 + captcha.n2) {
       setErrorMsg('Jawaban keamanan (Captcha) salah!');
@@ -258,19 +291,21 @@ export default function WAsistApp() {
     const password = form.password.value;
 
     if (username === 'Admin!' && password === '@CRM#Real#1!') {
-      setAppUser({ role: 'admin', name: 'Super Admin' });
-      setActiveTab('dashboard');
+      const adminData = { role: 'admin', name: 'Super Admin' };
+      setAppUser(adminData);
+      sessionStorage.setItem('wasist_auth', 'admin'); // Simpan Sesi Admin
+      setActiveTab(sessionStorage.getItem('wasist_tab') || 'dashboard');
       return;
     }
 
     const user = allUsers.find(u => u.email === username && u.password === password);
     if (user) {
+      sessionStorage.setItem('wasist_auth', user.id); // Simpan Sesi Pengguna
+      setAppUser(user);
       if (user.status === 'pending') {
         setAuthView('payment');
-        setAppUser({ ...user, pendingPayment: true });
       } else {
-        setAppUser(user);
-        setActiveTab('dashboard');
+        setActiveTab(sessionStorage.getItem('wasist_tab') || 'dashboard');
       }
     } else {
       setErrorMsg('Kredensial tidak valid atau salah password!');
@@ -279,7 +314,6 @@ export default function WAsistApp() {
     }
   };
 
-  // Fitur Lupa Password Logic
   const handleForgotPassword = (e) => {
     e.preventDefault();
     setErrorMsg('');
@@ -294,25 +328,25 @@ export default function WAsistApp() {
     }
   };
 
-  // Triggered by "Logout" buttons
   const promptLogout = () => {
     setIsLogoutModalOpen(true);
   };
 
-  // Triggered by "Ya, Keluar" in the modal
   const confirmLogout = () => {
     setAppUser(null);
     setAuthView('login');
     setAdminViewingUser(null);
     setActiveTab('dashboard');
     setIsLogoutModalOpen(false);
+    
+    // FIX: Bersihkan Sesi Storage saat logout
+    sessionStorage.removeItem('wasist_auth');
+    sessionStorage.removeItem('wasist_tab');
   };
 
-  // --- EARLY RETURNS DIMULAI DI SINI ---
-  // Pastikan tidak ada hooks (useState/useMemo/useEffect) di bawah garis ini.
   if (loading) return <div className="flex items-center justify-center h-screen bg-slate-50 text-blue-600"><Activity className="w-10 h-10 animate-spin" /></div>;
 
-  if (!appUser || appUser.pendingPayment) {
+  if (!appUser || appUser.status === 'pending') {
     return (
       <div className="min-h-screen bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-slate-50 flex items-center justify-center p-4">
         <div className="w-full max-w-md relative z-10">
@@ -426,7 +460,7 @@ export default function WAsistApp() {
               </form>
             )}
 
-            {authView === 'payment' && appUser?.pendingPayment && (
+            {authView === 'payment' && appUser?.status === 'pending' && (
               <div className="text-center space-y-4 animate-in fade-in slide-in-from-bottom-4">
                 <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-white shadow-sm">
                   <DollarSign className="w-10 h-10 text-blue-600" />
@@ -458,7 +492,11 @@ export default function WAsistApp() {
                   <a href={`https://wa.me/6285117392045?text=Halo%20Admin,%20saya%20sudah%20transfer%20sebesar%20Rp%20${appUser.paymentAmount?.toLocaleString('id-ID')}%20untuk%20aktivasi%20WAsist%20atas%20nama%20akun%20Email:%20${appUser.email}`} target="_blank" rel="noreferrer">
                     <Button variant="success" className="w-full py-4 text-base font-bold shadow-emerald-300" icon={MessageCircle}>Konfirmasi via WhatsApp</Button>
                   </a>
-                  <button onClick={() => { setAppUser(null); setAuthView('login'); }} className="text-sm font-semibold text-slate-500 mt-6 hover:text-slate-800 underline decoration-slate-300 underline-offset-4 transition-colors">Kembali ke Login</button>
+                  <button onClick={() => { 
+                    setAppUser(null); 
+                    setAuthView('login'); 
+                    sessionStorage.removeItem('wasist_auth'); 
+                  }} className="text-sm font-semibold text-slate-500 mt-6 hover:text-slate-800 underline decoration-slate-300 underline-offset-4 transition-colors">Kembali ke Login</button>
                 </div>
               </div>
             )}
