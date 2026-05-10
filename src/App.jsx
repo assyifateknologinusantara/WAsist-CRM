@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Users, UserPlus, PhoneForwarded, PieChart, 
   Settings, LogOut, CheckCircle, XCircle, Search, DollarSign, 
   TrendingUp, MessageCircle, AlertCircle, Calendar, Printer,
-  Filter, Activity, Smartphone, Eye, ArrowRight
+  Filter, Activity, Smartphone, Eye, ArrowRight, Shield, BarChart, HelpCircle
 } from 'lucide-react';
 
 // === FIREBASE SETUP (Canvas Standard & Production) ===
@@ -38,7 +38,7 @@ const Button = ({ children, onClick, variant = 'primary', className = '', type =
   const variants = {
     primary: "bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 focus:ring-blue-500 shadow-md shadow-blue-200 hover:shadow-lg hover:shadow-blue-300",
     success: "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 focus:ring-emerald-500 shadow-md shadow-emerald-200 hover:shadow-lg hover:shadow-emerald-300",
-    danger: "bg-rose-500 text-white hover:bg-rose-600 focus:ring-rose-500 shadow-md shadow-rose-200",
+    danger: "bg-rose-500 text-white hover:bg-rose-600 focus:ring-rose-500 shadow-md shadow-rose-200 hover:shadow-lg hover:shadow-rose-300",
     outline: "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:border-slate-300 focus:ring-slate-200",
     ghost: "bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus:ring-slate-200"
   };
@@ -56,12 +56,14 @@ const Modal = ({ isOpen, onClose, title, children }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm transition-opacity">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
-          <h3 className="text-xl font-bold text-slate-800">{title}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-rose-500 hover:bg-rose-50 p-1.5 rounded-full transition-colors">
-            <XCircle className="w-6 h-6" />
-          </button>
-        </div>
+        {title && (
+          <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
+            <h3 className="text-xl font-bold text-slate-800">{title}</h3>
+            <button onClick={onClose} className="text-slate-400 hover:text-rose-500 hover:bg-rose-50 p-1.5 rounded-full transition-colors">
+              <XCircle className="w-6 h-6" />
+            </button>
+          </div>
+        )}
         <div className="p-6">
           {children}
         </div>
@@ -82,6 +84,17 @@ export default function WAsistApp() {
   const [activeTab, setActiveTab] = useState('dashboard');
   
   const [adminViewingUser, setAdminViewingUser] = useState(null);
+
+  // Fitur Keamanan: Captcha Login State
+  const [captcha, setCaptcha] = useState({ n1: 0, n2: 0 });
+
+  // Fitur Keamanan: Konfirmasi Logout State
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+
+  // Fitur Grafik: Filter Admin Chart
+  const [chartFilter, setChartFilter] = useState('7d');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
 
   const currentUserData = adminViewingUser || appUser || {};
   const userLeads = useMemo(() => {
@@ -130,6 +143,13 @@ export default function WAsistApp() {
     };
   }, [firebaseUser]);
 
+  // Generate Captcha on Login Mount
+  useEffect(() => {
+    if (authView === 'login') {
+      setCaptcha({ n1: Math.floor(Math.random() * 10) + 1, n2: Math.floor(Math.random() * 10) + 1 });
+    }
+  }, [authView]);
+
   const handleRegister = async (e) => {
     e.preventDefault();
     setErrorMsg('');
@@ -163,7 +183,6 @@ export default function WAsistApp() {
     try {
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'wasist_users', newUserId), newUser);
       
-      // Mengirim Notifikasi ke Email Owner via FormSubmit
       fetch("https://formsubmit.co/ajax/assyifateknologinusantara@gmail.com", {
         method: "POST",
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
@@ -175,9 +194,7 @@ export default function WAsistApp() {
           Total_Tagihan: `Rp ${totalPayment.toLocaleString('id-ID')}`,
           Pesan: "User baru mendaftar di sistem. Mohon cek mutasi rekening dan lakukan approval di Dashboard Admin jika dana sudah masuk."
         })
-      }).then(response => response.json())
-        .then(data => console.log("Email notif terkirim:", data))
-        .catch(err => console.log("FormSubmit silent fail:", err));
+      }).catch(err => console.log("FormSubmit silent fail:", err));
 
       setAuthView('payment');
       setAppUser({ ...newUser, id: newUserId, pendingPayment: true });
@@ -192,12 +209,22 @@ export default function WAsistApp() {
     e.preventDefault();
     setErrorMsg('');
     const form = e.target;
+    
+    // Fitur Keamanan: Validasi Captcha
+    const captchaInput = parseInt(form.captcha.value);
+    if (captchaInput !== captcha.n1 + captcha.n2) {
+      setErrorMsg('Jawaban keamanan (Captcha) salah!');
+      setCaptcha({ n1: Math.floor(Math.random() * 10) + 1, n2: Math.floor(Math.random() * 10) + 1 });
+      form.captcha.value = '';
+      return;
+    }
+
     const username = form.username.value;
     const password = form.password.value;
 
     if (username === 'Admin!' && password === '@CRM#Real#1!') {
       setAppUser({ role: 'admin', name: 'Super Admin' });
-      setActiveTab('dashboard'); // Default admin tab
+      setActiveTab('dashboard');
       return;
     }
 
@@ -212,14 +239,23 @@ export default function WAsistApp() {
       }
     } else {
       setErrorMsg('Kredensial tidak valid atau salah password!');
+      setCaptcha({ n1: Math.floor(Math.random() * 10) + 1, n2: Math.floor(Math.random() * 10) + 1 });
+      form.captcha.value = '';
     }
   };
 
-  const handleLogout = () => {
+  // Triggered by "Logout" buttons
+  const promptLogout = () => {
+    setIsLogoutModalOpen(true);
+  };
+
+  // Triggered by "Ya, Keluar" in the modal
+  const confirmLogout = () => {
     setAppUser(null);
     setAuthView('login');
     setAdminViewingUser(null);
     setActiveTab('dashboard');
+    setIsLogoutModalOpen(false);
   };
 
   if (loading) return <div className="flex items-center justify-center h-screen bg-slate-50 text-blue-600"><Activity className="w-10 h-10 animate-spin" /></div>;
@@ -253,6 +289,16 @@ export default function WAsistApp() {
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5">Password</label>
                   <input name="password" type="password" required className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none transition-all" placeholder="••••••••" />
                 </div>
+                
+                {/* Fitur Keamanan: Captcha UI */}
+                <div className="bg-blue-50/60 p-3.5 rounded-xl border border-blue-100 flex items-center justify-between gap-3 shadow-sm">
+                  <div className="flex items-center gap-2.5">
+                    <Shield className="w-5 h-5 text-blue-600" />
+                    <span className="text-sm font-bold text-slate-700">Berapa {captcha.n1} + {captcha.n2}?</span>
+                  </div>
+                  <input name="captcha" type="number" required className="w-20 px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-center font-black text-slate-700 shadow-sm transition-all" placeholder="Hasil" />
+                </div>
+
                 <Button type="submit" className="w-full py-3.5 text-base mt-2">Masuk ke Dashboard</Button>
                 <div className="text-center mt-6">
                   <p className="text-sm text-slate-500">
@@ -321,7 +367,7 @@ export default function WAsistApp() {
                   <a href={`https://wa.me/6285117392045?text=Halo%20Admin,%20saya%20sudah%20transfer%20sebesar%20Rp%20${appUser.paymentAmount?.toLocaleString('id-ID')}%20untuk%20aktivasi%20WAsist%20atas%20nama%20akun%20Email:%20${appUser.email}`} target="_blank" rel="noreferrer">
                     <Button variant="success" className="w-full py-4 text-base font-bold shadow-emerald-300" icon={MessageCircle}>Konfirmasi via WhatsApp</Button>
                   </a>
-                  <button onClick={handleLogout} className="text-sm font-semibold text-slate-500 mt-6 hover:text-slate-800 underline decoration-slate-300 underline-offset-4 transition-colors">Kembali ke Login</button>
+                  <button onClick={() => { setAppUser(null); setAuthView('login'); }} className="text-sm font-semibold text-slate-500 mt-6 hover:text-slate-800 underline decoration-slate-300 underline-offset-4 transition-colors">Kembali ke Login</button>
                 </div>
               </div>
             )}
@@ -340,6 +386,34 @@ export default function WAsistApp() {
     const approveUser = async (id) => {
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'wasist_users', id), { status: 'approved' });
     };
+
+    // Fitur Grafik: Memproses Data Pendapatan (Chart Logic)
+    const filteredChartUsers = useMemo(() => {
+      let filtered = approvedUsers;
+      const now = Date.now();
+      if (chartFilter === '7d') filtered = approvedUsers.filter(u => now - (u.createdAt || now) <= 7 * 24 * 60 * 60 * 1000);
+      else if (chartFilter === '30d') filtered = approvedUsers.filter(u => now - (u.createdAt || now) <= 30 * 24 * 60 * 60 * 1000);
+      else if (chartFilter === 'custom' && customStart && customEnd) {
+         const start = new Date(customStart).getTime();
+         const end = new Date(customEnd).getTime() + 86400000; 
+         filtered = approvedUsers.filter(u => (u.createdAt || now) >= start && (u.createdAt || now) <= end);
+      }
+      return filtered;
+    }, [approvedUsers, chartFilter, customStart, customEnd]);
+
+    const chartData = useMemo(() => {
+      const rawGroups = {};
+      filteredChartUsers.forEach(u => {
+         const dObj = new Date(u.createdAt || Date.now());
+         dObj.setHours(0,0,0,0);
+         const ts = dObj.getTime();
+         rawGroups[ts] = (rawGroups[ts] || 0) + (u.paymentAmount || 249000);
+      });
+      return Object.keys(rawGroups).sort().map(ts => ({
+         label: new Date(Number(ts)).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+         value: rawGroups[ts]
+      }));
+    }, [filteredChartUsers]);
 
     return (
       <div className="flex h-screen bg-slate-50">
@@ -367,7 +441,7 @@ export default function WAsistApp() {
               <PieChart className="w-5 h-5"/> Laporan Omset
             </button>
           </nav>
-          <button onClick={handleLogout} className="flex items-center gap-3 p-3.5 text-slate-400 hover:text-rose-400 mt-auto hover:bg-slate-800 rounded-xl transition-all font-medium">
+          <button onClick={promptLogout} className="flex items-center gap-3 p-3.5 text-slate-400 hover:text-rose-400 mt-auto hover:bg-slate-800 rounded-xl transition-all font-medium">
             <LogOut className="w-5 h-5"/> Logout Sistem
           </button>
         </div>
@@ -423,6 +497,56 @@ export default function WAsistApp() {
                   </Card>
                 </div>
 
+                {/* --- FITUR 1: GRAFIK PENDAPATAN ADMIN --- */}
+                <Card className="mt-8 border-0 shadow-lg shadow-blue-100/50">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><BarChart className="w-5 h-5 text-blue-600"/> Grafik Pendapatan</h3>
+                      <p className="text-xs text-slate-500 mt-1">Tren omset penjualan WAsist Anda</p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select value={chartFilter} onChange={(e) => setChartFilter(e.target.value)} className="text-sm border border-slate-200 font-medium text-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none py-2 px-3 bg-slate-50 transition-all">
+                        <option value="7d">7 Hari Terakhir</option>
+                        <option value="30d">30 Hari Terakhir</option>
+                        <option value="all">Total Keseluruhan</option>
+                        <option value="custom">Pilih Tanggal</option>
+                      </select>
+                      {chartFilter === 'custom' && (
+                        <div className="flex items-center gap-2 animate-in fade-in zoom-in-95">
+                          <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="text-sm border border-slate-200 rounded-lg py-2 px-2 bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500" />
+                          <span className="text-slate-400 font-bold">-</span>
+                          <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="text-sm border border-slate-200 rounded-lg py-2 px-2 bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="h-64 flex items-end gap-2 md:gap-4 border-b border-slate-100 pb-2 relative mt-4">
+                    {chartData.length === 0 ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 text-sm pb-10">
+                         <BarChart className="w-8 h-8 opacity-20 mb-2"/>
+                         Tidak ada transaksi di rentang waktu ini.
+                      </div>
+                    ) : (
+                      chartData.map((d, idx) => {
+                        const maxVal = Math.max(...chartData.map(c => c.value), 1);
+                        const heightPct = (d.value / maxVal) * 100;
+                        return (
+                          <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full group relative cursor-pointer">
+                            <div className="absolute bottom-full mb-2 bg-slate-800 text-white text-xs py-1 px-2.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 shadow-lg font-bold">
+                              Rp {d.value.toLocaleString('id-ID')}
+                            </div>
+                            <div className="w-full max-w-[40px] bg-gradient-to-t from-blue-600 to-blue-400 rounded-t-md transition-all duration-500 group-hover:from-blue-500 group-hover:to-blue-300 shadow-sm relative overflow-hidden" style={{ height: `${heightPct}%`, minHeight: '4px' }}>
+                              <div className="absolute top-0 left-0 right-0 h-1.5 bg-white/30 rounded-t-md"></div>
+                            </div>
+                            <span className="text-[9px] md:text-xs text-slate-500 mt-3 truncate w-full text-center font-bold tracking-tight">{d.label}</span>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                </Card>
+
                 {pendingUsers.length > 0 && (
                   <Card className="p-0 border-0 overflow-hidden shadow-lg shadow-rose-100/50 mt-8">
                     <div className="p-5 border-b border-rose-100 bg-rose-50 flex justify-between items-center">
@@ -431,12 +555,12 @@ export default function WAsistApp() {
                     </div>
                     <div className="divide-y divide-rose-100/50">
                       {pendingUsers.slice(0, 3).map(user => (
-                        <div key={user.id} className="p-4 flex items-center justify-between bg-white">
+                        <div key={user.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white">
                           <div>
                             <p className="font-bold text-slate-800">{user.name}</p>
                             <p className="text-xs text-slate-500">{user.email} • Tagihan: Rp {user.paymentAmount?.toLocaleString('id-ID')}</p>
                           </div>
-                          <Button onClick={() => approveUser(user.id)} variant="success" className="px-3 py-1.5 text-xs">Approve</Button>
+                          <Button onClick={() => approveUser(user.id)} variant="success" className="px-3 py-1.5 text-xs w-full sm:w-auto">Approve Pendaftar</Button>
                         </div>
                       ))}
                     </div>
@@ -485,9 +609,9 @@ export default function WAsistApp() {
                             </td>
                             <td className="px-6 py-4 flex justify-end gap-2">
                               {user.status === 'pending' && (
-                                <Button onClick={() => approveUser(user.id)} variant="success" className="px-3 py-1.5 text-xs">Approve</Button>
+                                <Button onClick={() => approveUser(user.id)} variant="success" className="px-3 py-1.5 text-xs shadow-none">Approve</Button>
                               )}
-                              <Button onClick={() => setAdminViewingUser(user)} variant="outline" className="px-3 py-1.5 text-xs bg-white" icon={Eye}>Lihat Dashboard</Button>
+                              <Button onClick={() => setAdminViewingUser(user)} variant="outline" className="px-3 py-1.5 text-xs bg-white shadow-none" icon={Eye}>Dashboard</Button>
                             </td>
                           </tr>
                         ))}
@@ -584,13 +708,28 @@ export default function WAsistApp() {
             <span className="text-[10px] font-bold mt-1 tracking-wide">Laporan</span>
           </button>
 
-          <button onClick={handleLogout} className="relative flex flex-col items-center justify-center w-full py-2 text-slate-500 hover:text-rose-400 transition-colors">
+          <button onClick={promptLogout} className="relative flex flex-col items-center justify-center w-full py-2 text-slate-500 hover:text-rose-400 transition-colors">
             <div className="p-1.5 rounded-xl">
               <LogOut className="w-5 h-5" />
             </div>
             <span className="text-[10px] font-bold mt-1 tracking-wide opacity-70">Logout</span>
           </button>
         </nav>
+
+        {/* MODAL KONFIRMASI LOGOUT ADMIN */}
+        <Modal isOpen={isLogoutModalOpen} onClose={() => setIsLogoutModalOpen(false)}>
+          <div className="text-center py-2">
+            <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-5 border-4 border-rose-100">
+              <HelpCircle className="w-8 h-8 text-rose-500" />
+            </div>
+            <h3 className="text-xl font-black text-slate-800 mb-2">Konfirmasi Keluar</h3>
+            <p className="text-sm text-slate-500 mb-8 font-medium">Sesi Anda akan diakhiri. Apakah Anda yakin ingin keluar dari sistem?</p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Button variant="outline" onClick={() => setIsLogoutModalOpen(false)} className="font-bold border-slate-300">Batal Keluar</Button>
+              <Button variant="danger" onClick={confirmLogout} icon={LogOut} className="font-bold">Ya, Keluarkan Saya</Button>
+            </div>
+          </div>
+        </Modal>
 
       </div>
     );
@@ -670,7 +809,7 @@ export default function WAsistApp() {
           {isViewMode ? (
              <Button onClick={() => { setAdminViewingUser(null); setActiveTab('dashboard'); }} variant="outline" className="w-full text-xs font-bold border-slate-300">Kembali ke Admin</Button>
           ) : (
-             <Button onClick={handleLogout} variant="ghost" className="w-full text-rose-600 hover:bg-rose-50 font-bold" icon={LogOut}>Logout Sistem</Button>
+             <Button onClick={promptLogout} variant="ghost" className="w-full text-rose-600 hover:bg-rose-50 font-bold" icon={LogOut}>Logout Sistem</Button>
           )}
         </div>
       </aside>
@@ -689,7 +828,7 @@ export default function WAsistApp() {
           {isViewMode ? (
              <button onClick={() => { setAdminViewingUser(null); setActiveTab('dashboard'); }} className="text-xs font-bold bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg">Back Admin</button>
           ) : (
-             <button onClick={handleLogout} className="text-slate-400 hover:text-rose-500 bg-slate-50 p-2 rounded-xl border border-slate-100"><LogOut className="w-5 h-5"/></button>
+             <button onClick={promptLogout} className="text-slate-400 hover:text-rose-500 bg-slate-50 p-2 rounded-xl border border-slate-100"><LogOut className="w-5 h-5"/></button>
           )}
         </div>
 
@@ -979,6 +1118,21 @@ export default function WAsistApp() {
           )
         })}
       </nav>
+
+      {/* MODAL KONFIRMASI LOGOUT USER */}
+      <Modal isOpen={isLogoutModalOpen} onClose={() => setIsLogoutModalOpen(false)}>
+        <div className="text-center py-2">
+          <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-5 border-4 border-rose-100">
+            <HelpCircle className="w-8 h-8 text-rose-500" />
+          </div>
+          <h3 className="text-xl font-black text-slate-800 mb-2">Konfirmasi Keluar</h3>
+          <p className="text-sm text-slate-500 mb-8 font-medium">Sesi Anda akan diakhiri. Apakah Anda yakin ingin keluar dari sistem?</p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Button variant="outline" onClick={() => setIsLogoutModalOpen(false)} className="font-bold border-slate-300">Batal Keluar</Button>
+            <Button variant="danger" onClick={confirmLogout} icon={LogOut} className="font-bold">Ya, Keluarkan Saya</Button>
+          </div>
+        </div>
+      </Modal>
 
     </div>
   );
