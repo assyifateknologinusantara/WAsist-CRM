@@ -9,7 +9,7 @@ import {
   Settings, LogOut, CheckCircle, XCircle, Search, DollarSign, 
   TrendingUp, MessageCircle, AlertCircle, Calendar, Printer,
   Filter, Activity, Smartphone, Eye, ArrowRight, Shield, BarChart, HelpCircle,
-  Gift // Ditambahkan icon Gift untuk fitur Upsell produk baru
+  Gift, Zap, Wand2, Copy
 } from 'lucide-react';
 
 // === FIREBASE SETUP (Canvas Standard & Production) ===
@@ -56,16 +56,16 @@ const Modal = ({ isOpen, onClose, title, children }) => {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm transition-opacity">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-y-auto max-h-[95vh] animate-in fade-in zoom-in-95 duration-200 hide-scrollbar">
         {title && (
-          <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
+          <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/50 sticky top-0 z-10 backdrop-blur-md">
             <h3 className="text-xl font-bold text-slate-800">{title}</h3>
             <button onClick={onClose} className="text-slate-400 hover:text-rose-500 hover:bg-rose-50 p-1.5 rounded-full transition-colors">
               <XCircle className="w-6 h-6" />
             </button>
           </div>
         )}
-        <div className="p-6">
+        <div className="p-5 sm:p-6">
           {children}
         </div>
       </div>
@@ -96,7 +96,6 @@ export default function WAsistApp() {
   
   const [adminViewingUser, setAdminViewingUser] = useState(null);
 
-  // State untuk menyimpan data Lead yang sedang di-Upsell
   const [crossSellLead, setCrossSellLead] = useState(null);
 
   const [captcha, setCaptcha] = useState({ n1: 0, n2: 0 });
@@ -105,6 +104,9 @@ export default function WAsistApp() {
   const [chartFilter, setChartFilter] = useState('7d');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
+
+  // Fitur copy to clipboard stat untuk tab Integrasi
+  const [copyStatus, setCopyStatus] = useState('');
 
   const currentUserData = adminViewingUser || appUser || {};
   
@@ -338,6 +340,15 @@ export default function WAsistApp() {
     sessionStorage.removeItem('wasist_auth');
     sessionStorage.removeItem('wasist_tab');
   };
+
+  const executeCopy = (text, type) => {
+    try {
+      document.execCommand('copy'); // For canvas iframe compat
+      navigator.clipboard.writeText(text);
+    } catch(e){}
+    setCopyStatus(type);
+    setTimeout(() => setCopyStatus(''), 2000);
+  }
 
   if (loading) return <div className="flex items-center justify-center h-screen bg-slate-50 text-blue-600"><Activity className="w-10 h-10 animate-spin" /></div>;
 
@@ -845,7 +856,6 @@ export default function WAsistApp() {
   
   const todayDateStr = new Date().toISOString().split('T')[0];
   
-  // FIX: Fitur Reminders sekarang juga mengecek jadwal "Upsell / Cross-Sell" untuk klien yang sudah "Closed Won"
   const reminderLeads = userLeads.filter(l => 
     l.followUpDate === todayDateStr && 
     l.status !== 'Closed Lost' && 
@@ -857,14 +867,15 @@ export default function WAsistApp() {
     { id: 'leads', label: 'Database', icon: Users },
     { id: 'pipeline', label: 'Pipeline', icon: Activity },
     { id: 'reminders', label: 'Reminder', icon: PhoneForwarded, badge: reminderLeads.length },
-    { id: 'reports', label: 'Laporan', icon: PieChart }
+    { id: 'reports', label: 'Laporan', icon: PieChart },
+    { id: 'integration', label: 'Automasi WA', icon: Zap } // Menambah menu tab Integrasi Automasi
   ];
 
   return (
     <div className="flex h-screen bg-slate-50 font-sans text-slate-800">
       
       {/* Sidebar Desktop User */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex-col hidden md:flex z-20 shadow-sm">
+      <aside className="w-64 bg-white border-r border-slate-200 flex-col hidden md:flex z-20 shadow-sm overflow-y-auto">
         <div className="p-6 border-b border-slate-100 flex items-center gap-3">
           <div className="bg-gradient-to-br from-blue-600 to-indigo-600 p-2 rounded-xl text-white shadow-md shadow-blue-200">
             <Smartphone className="w-6 h-6" />
@@ -936,10 +947,12 @@ export default function WAsistApp() {
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-4 animate-in fade-in slide-in-from-top-4 duration-500">
             <div>
               <h1 className="text-2xl md:text-3xl font-black text-slate-900 capitalize tracking-tight">
-                {activeTab === 'dashboard' ? 'Overview' : activeTab.replace('-', ' ')}
+                {activeTab === 'dashboard' ? 'Overview' : activeTab === 'integration' ? 'Automasi WA' : activeTab.replace('-', ' ')}
               </h1>
               <p className="text-slate-500 text-sm md:text-base font-medium mt-1">
-                {activeTab === 'dashboard' ? 'Pantau performa konversi leads Anda hari ini.' : 'Kelola dan organisir prospek Anda dengan mudah.'}
+                {activeTab === 'dashboard' ? 'Pantau performa konversi leads Anda hari ini.' : 
+                 activeTab === 'integration' ? 'Koneksikan CRM dengan Bot Automasi WhatsApp.' : 
+                 'Kelola dan organisir prospek Anda dengan mudah.'}
               </p>
             </div>
             {activeTab === 'leads' && !isViewMode && (
@@ -1052,7 +1065,6 @@ export default function WAsistApp() {
                             </span>
                           ) : <span className="text-slate-300">-</span>}
                           
-                          {/* Label indikator jika ada target Upsell */}
                           {lead.crossSellProduct && (
                              <div className="mt-1.5 text-[10px] font-bold text-purple-600 bg-purple-50 inline-block px-1.5 py-0.5 rounded border border-purple-100">
                                + Upsell Produk Baru
@@ -1061,7 +1073,6 @@ export default function WAsistApp() {
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center justify-end gap-2">
-                            {/* FIX: Tombol Upsell Baru untuk Lead "Closed Won" */}
                             {lead.status === 'Closed Won' && (
                                <Button variant="outline" onClick={() => setCrossSellLead(lead)} className="px-3 py-1.5 text-xs border-purple-200 text-purple-600 hover:bg-purple-50 hover:border-purple-300 font-bold" icon={Gift}>
                                  Upsell
@@ -1131,7 +1142,6 @@ export default function WAsistApp() {
                         <h3 className="font-black text-slate-800 text-xl">{lead.name}</h3>
                         <StatusBadge status={lead.status} />
                         
-                        {/* FIX: Badge Label jika ini adalah Follow-up Upsell Produk Baru */}
                         {lead.status === 'Closed Won' && lead.crossSellProduct && (
                           <span className="bg-purple-100 text-purple-700 text-[10px] uppercase font-black px-2 py-0.5 rounded-lg border border-purple-200 shadow-sm flex items-center gap-1.5">
                             <Gift className="w-3.5 h-3.5"/> Upsell: {lead.crossSellProduct}
@@ -1214,6 +1224,79 @@ export default function WAsistApp() {
              </div>
           )}
 
+          {/* FIX: Tab Integrasi API Baru (Panduan Autopaste Backend via WA Bot) */}
+          {activeTab === 'integration' && (
+             <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+               <Card className="border-0 shadow-lg shadow-slate-200/50 relative overflow-hidden">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 pb-6 border-b border-slate-100 gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="bg-gradient-to-br from-blue-100 to-indigo-100 p-3 rounded-2xl border border-blue-200/50">
+                        <Zap className="text-blue-600 w-8 h-8" />
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-black text-slate-800">API Webhook & Automasi WA</h2>
+                        <p className="text-sm text-slate-500 font-medium mt-1">Sambungkan sistem CRM dengan bot otomatis (Make, Fonnte, Zapier, Wati).</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-6 text-slate-700">
+                    <div className="bg-blue-50 p-5 rounded-2xl border border-blue-100 flex gap-3 items-start">
+                      <Activity className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-sm font-medium leading-relaxed">
+                        Anda dapat membangun sistem <strong>Auto-Save Data</strong> agar setiap chat WhatsApp yang masuk dari prospek baru dapat langsung tertulis di Database Leads tanpa Anda harus membuka aplikasi. Gunakan integrasi pihak ketiga untuk melakukan request POST langsung ke Firebase Database milik Anda.
+                      </p>
+                    </div>
+
+                    <div>
+                      <h3 className="font-black text-slate-800 mb-3 flex items-center gap-2"><Settings className="w-4 h-4"/> Parameter Koneksi Database</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                         
+                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 group">
+                           <div className="flex justify-between items-start mb-2">
+                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Firestore Collection Path</p>
+                             <button onClick={() => executeCopy(`artifacts/${appId}/public/data/wasist_leads`, 'path')} className="text-slate-400 hover:text-blue-600 transition-colors" title="Salin">
+                               {copyStatus === 'path' ? <CheckCircle className="w-4 h-4 text-emerald-500"/> : <Copy className="w-4 h-4"/>}
+                             </button>
+                           </div>
+                           <code className="text-xs font-bold text-blue-600 block break-all font-mono">artifacts/{appId}/public/data/wasist_leads</code>
+                         </div>
+
+                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 group">
+                           <div className="flex justify-between items-start mb-2">
+                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">User ID Anda (Pemilik Akses)</p>
+                             <button onClick={() => executeCopy(currentUserData.id, 'id')} className="text-slate-400 hover:text-blue-600 transition-colors" title="Salin">
+                               {copyStatus === 'id' ? <CheckCircle className="w-4 h-4 text-emerald-500"/> : <Copy className="w-4 h-4"/>}
+                             </button>
+                           </div>
+                           <code className="text-xs font-bold text-blue-600 block break-all font-mono">{currentUserData.id}</code>
+                         </div>
+
+                      </div>
+                    </div>
+
+                    <div>
+                       <h3 className="font-black text-slate-800 mb-3 flex items-center gap-2"><Code className="w-4 h-4"/> Contoh JSON Payload (Body)</h3>
+                       <p className="text-xs font-medium text-slate-500 mb-3">Kirimkan format JSON berikut melalui HTTP Request POST (Firestore REST API) / Zapier Firebase Action.</p>
+                       <div className="bg-slate-900 text-emerald-400 p-5 rounded-2xl font-mono text-xs overflow-x-auto border border-slate-800 shadow-inner">
+<pre>{`{
+  "userId": "${currentUserData.id}",
+  "name": "{{Variable_Nama_WA}}",
+  "phone": "{{Variable_Nomor_WA}}",
+  "status": "New",
+  "value": 0,
+  "followUpDate": "2026-05-15",
+  "nicheInfo": "{{Variable_Pesan_Awal}}",
+  "notes": "Diinput otomatis dari API Bot WA",
+  "createdAt": ${Date.now()}
+}`}</pre>
+                       </div>
+                    </div>
+                  </div>
+               </Card>
+             </div>
+          )}
+
         </div>
       </main>
 
@@ -1221,21 +1304,21 @@ export default function WAsistApp() {
       <CrossSellModal lead={crossSellLead} onClose={() => setCrossSellLead(null)} appId={appId} />
 
       {/* MOBILE BOTTOM NAVIGATION USER (Tampil Hanya di HP) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-slate-200 z-50 flex justify-around items-center p-2 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-slate-200 z-50 flex justify-around items-center p-2 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.05)] overflow-x-auto hide-scrollbar">
         {tabsMenu.map(item => {
           const isActive = activeTab === item.id;
           return (
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`relative flex flex-col items-center justify-center w-full py-2 ${isActive ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
+              className={`relative flex flex-col items-center justify-center min-w-[64px] py-2 px-1 ${isActive ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
             >
               <div className={`p-1.5 rounded-xl transition-all duration-300 ${isActive ? 'bg-blue-100 scale-110' : ''}`}>
                 <item.icon className="w-5 h-5" />
               </div>
-              <span className={`text-[10px] font-bold mt-1 tracking-wide ${isActive ? 'opacity-100' : 'opacity-70'}`}>{item.label}</span>
+              <span className={`text-[9px] font-bold mt-1 tracking-wide whitespace-nowrap ${isActive ? 'opacity-100' : 'opacity-70'}`}>{item.label}</span>
               {item.badge > 0 && (
-                <span className="absolute top-1 right-2 bg-rose-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow-sm">
+                <span className="absolute top-1 right-2 bg-rose-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full shadow-sm">
                   {item.badge}
                 </span>
               )}
@@ -1278,12 +1361,15 @@ const StatusBadge = ({ status }) => {
   );
 };
 
+const Code = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+);
+
 // Fitur 10 & Upsell: One-Click WhatsApp Chat
 const OneClickWA = ({ lead, userNiche, compact = false, showText = false }) => {
   const generateMessage = () => {
     let msg = `Halo Bapak/Ibu ${lead.name},\n`;
     
-    // FIX: Pesan khusus jika jadwal ini adalah penawaran Upsell / Produk Baru
     if (lead.status === 'Closed Won' && lead.crossSellProduct) {
        msg += `Terima kasih telah mempercayakan layanan ${userNiche} sebelumnya. Saat ini kami memiliki penawaran spesial untuk produk/layanan terbaru kami, yaitu *${lead.crossSellProduct}*. Apakah Bapak/Ibu berkenan untuk berdiskusi sejenak mengenai penawaran ini?`;
     } 
@@ -1372,10 +1458,48 @@ const CrossSellModal = ({ appId, lead, onClose }) => {
   );
 };
 
-// Fitur 1: Input Lead Form
+// FIX: Peningkatan Fitur Lead Form dengan Auto-Extractor
 const LeadFormModal = ({ appId, userId }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [smartPaste, setSmartPaste] = useState('');
+
+  // Logika Sistem Auto-Parse Data dari Pesan WA Copas
+  const handleSmartExtract = () => {
+    if(!smartPaste) return;
+    const form = document.getElementById('lead-form');
+    if(!form) return;
+
+    const text = smartPaste;
+    
+    // 1. Ekstrak Nomor HP (Dimulai dari 08, 62, atau +62)
+    const phoneMatch = text.match(/(?:08|\+62|62)[0-9]{7,13}/);
+    if(phoneMatch) form.phone.value = phoneMatch[0];
+
+    // 2. Ekstrak Nama (Mencari kata Nama:, Name:, dll)
+    const nameMatch = text.match(/(?:nama|name|sdr|bapak|ibu)\s*[:-]?\s*([^\n]+)/i);
+    if(nameMatch) {
+        form.leadName.value = nameMatch[1].trim();
+    } else {
+        const lines = text.split('\n').filter(l => l.trim().length > 0);
+        if(lines.length > 0) form.leadName.value = lines[0].substring(0, 30).trim();
+    }
+
+    // 3. Ekstrak Nilai Rupiah
+    const valueMatch = text.match(/(?:rp|harga|nilai|budget|tagihan)\s*[:-]?\s*([0-9.,]+)/i);
+    if(valueMatch) {
+        form.value.value = valueMatch[1].replace(/[^0-9]/g, '');
+    }
+
+    // 4. Ekstrak Minat / Kebutuhan
+    const minatMatch = text.match(/(?:minat|kebutuhan|info|pesan)\s*[:-]?\s*([^\n]+)/i);
+    if (minatMatch) {
+        form.nicheInfo.value = minatMatch[1].trim();
+    }
+
+    // Sisanya dilempar ke notes
+    form.notes.value = "=== Pesan Teks Asli ===\n" + text;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1398,6 +1522,7 @@ const LeadFormModal = ({ appId, userId }) => {
       const newLeadId = `lead_${Date.now()}`;
       await setDoc(doc(getFirestore(), 'artifacts', appId, 'public', 'data', 'wasist_leads', newLeadId), newLead);
       setIsOpen(false);
+      setSmartPaste(''); // Reset state
     } catch (err) {
       console.error(err);
     } finally {
@@ -1409,7 +1534,32 @@ const LeadFormModal = ({ appId, userId }) => {
     <>
       <Button onClick={() => setIsOpen(true)} icon={UserPlus} className="font-bold w-full md:w-auto shadow-blue-300">Tambah Prospek</Button>
       <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="Data Prospek Baru">
-        <form onSubmit={handleSubmit} className="space-y-5">
+        
+        {/* FITUR AUTO PASTE (BARU) */}
+        <div className="mb-6 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-blue-200/60 shadow-inner">
+           <label className="flex items-center gap-2 text-sm font-black text-blue-900 mb-2">
+             <Wand2 className="w-4 h-4 text-blue-600"/> Auto-Isi dari Copy Chat WA
+           </label>
+           <p className="text-[11px] text-blue-600 font-medium mb-3">Copy pesan klien di WhatsApp dan Paste di sini. AI sederhana kami akan mencoba mengisi form otomatis untuk Anda.</p>
+           <textarea 
+              value={smartPaste} 
+              onChange={e => setSmartPaste(e.target.value)}
+              rows="3" 
+              placeholder="Contoh: &#10;Nama: Budi Santoso&#10;No WA: 081234567890&#10;Minat: Mau pesen jasa web" 
+              className="w-full px-3 py-2 text-sm bg-white border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none mb-3 resize-none font-medium text-slate-700"
+           ></textarea>
+           <Button variant="primary" type="button" onClick={handleSmartExtract} disabled={!smartPaste} className="w-full py-2.5 text-xs font-bold shadow-md" icon={Zap}>
+             Ekstrak Data ke Form
+           </Button>
+        </div>
+
+        <div className="flex items-center gap-4 mb-6">
+           <div className="h-px bg-slate-200 flex-1"></div>
+           <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Atau Isi Manual</span>
+           <div className="h-px bg-slate-200 flex-1"></div>
+        </div>
+
+        <form id="lead-form" onSubmit={handleSubmit} className="space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <label className="block text-sm font-bold text-slate-700 mb-1.5">Nama Prospek</label>
@@ -1443,7 +1593,7 @@ const LeadFormModal = ({ appId, userId }) => {
             </div>
             <div className="sm:col-span-2">
               <label className="block text-sm font-bold text-slate-700 mb-1.5">Catatan Khusus (Opsional)</label>
-              <textarea name="notes" rows="2" placeholder="Catatan tambahan untuk pengingat..." className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all font-medium"></textarea>
+              <textarea name="notes" rows="3" placeholder="Catatan tambahan untuk pengingat..." className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all font-medium resize-none"></textarea>
             </div>
           </div>
           <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
