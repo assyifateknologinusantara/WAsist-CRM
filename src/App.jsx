@@ -9,10 +9,10 @@ import {
   Settings, LogOut, CheckCircle, XCircle, Search, DollarSign, 
   TrendingUp, MessageCircle, AlertCircle, Calendar, Printer,
   Filter, Activity, Smartphone, Eye, ArrowRight, Shield, BarChart, HelpCircle,
-  Gift, Zap, Wand2, Copy
+  Gift, Zap, Wand2, Copy, ImagePlus, Loader2
 } from 'lucide-react';
 
-// === FIREBASE SETUP (Canvas Standard & Production) ===
+// === FIREBASE SETUP ===
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
   apiKey: "AIzaSyAHeSx_MUD2odnqQIBl47pfPlcv0zhM46s",
   authDomain: "wasist-crm.firebaseapp.com",
@@ -27,6 +27,21 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'wasist-app-v1';
+
+// API Fetch dengan Retry Strategy (Untuk AI Vision)
+const fetchWithRetry = async (url, options, retries = 5) => {
+  const delays = [1000, 2000, 4000, 8000, 16000];
+  for (let i = 0; i < retries; i++) {
+    try {
+      const res = await fetch(url, options);
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      return await res.json();
+    } catch (err) {
+      if (i === retries - 1) throw err;
+      await new Promise(resolve => setTimeout(resolve, delays[i]));
+    }
+  }
+};
 
 const Card = ({ children, className = '' }) => (
   <div className={`bg-white rounded-2xl shadow-sm border border-slate-100 p-6 hover:shadow-md transition-shadow duration-300 ${className}`}>
@@ -105,7 +120,6 @@ export default function WAsistApp() {
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
 
-  // Fitur copy to clipboard stat untuk tab Integrasi
   const [copyStatus, setCopyStatus] = useState('');
 
   const currentUserData = adminViewingUser || appUser || {};
@@ -343,7 +357,7 @@ export default function WAsistApp() {
 
   const executeCopy = (text, type) => {
     try {
-      document.execCommand('copy'); // For canvas iframe compat
+      document.execCommand('copy'); 
       navigator.clipboard.writeText(text);
     } catch(e){}
     setCopyStatus(type);
@@ -868,7 +882,7 @@ export default function WAsistApp() {
     { id: 'pipeline', label: 'Pipeline', icon: Activity },
     { id: 'reminders', label: 'Reminder', icon: PhoneForwarded, badge: reminderLeads.length },
     { id: 'reports', label: 'Laporan', icon: PieChart },
-    { id: 'integration', label: 'Automasi WA', icon: Zap } // Menambah menu tab Integrasi Automasi
+    { id: 'integration', label: 'Automasi WA', icon: Zap } 
   ];
 
   return (
@@ -1224,7 +1238,7 @@ export default function WAsistApp() {
              </div>
           )}
 
-          {/* FIX: Tab Integrasi API Baru (Panduan Autopaste Backend via WA Bot) */}
+          {/* Tab Integrasi API Baru (Panduan Autopaste Backend via WA Bot) */}
           {activeTab === 'integration' && (
              <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                <Card className="border-0 shadow-lg shadow-slate-200/50 relative overflow-hidden">
@@ -1365,7 +1379,7 @@ const Code = ({ className }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
 );
 
-// Fitur 10 & Upsell: One-Click WhatsApp Chat
+// Fitur One-Click WhatsApp Chat
 const OneClickWA = ({ lead, userNiche, compact = false, showText = false }) => {
   const generateMessage = () => {
     let msg = `Halo Bapak/Ibu ${lead.name},\n`;
@@ -1410,7 +1424,7 @@ const OneClickWA = ({ lead, userNiche, compact = false, showText = false }) => {
   );
 };
 
-// Fitur Baru: Modal Cross-Sell / Upsell untuk produk baru
+// Fitur Modal Cross-Sell
 const CrossSellModal = ({ appId, lead, onClose }) => {
   const [loading, setLoading] = useState(false);
   
@@ -1458,25 +1472,101 @@ const CrossSellModal = ({ appId, lead, onClose }) => {
   );
 };
 
-// FIX: Peningkatan Fitur Lead Form dengan Auto-Extractor
+// FIX: Peningkatan Fitur Form dengan AI Vision Screenshot Reader
 const LeadFormModal = ({ appId, userId }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [smartPaste, setSmartPaste] = useState('');
+  
+  // State untuk ekstrak Gambar Screenshot via Vision AI
+  const [aiProcessing, setAiProcessing] = useState(false);
+  const [aiError, setAiError] = useState('');
+  const [imagePreview, setImagePreview] = useState(null);
 
-  // Logika Sistem Auto-Parse Data dari Pesan WA Copas
-  const handleSmartExtract = () => {
+  // Proses Ekstrak Menggunakan AI Vision (Google Gemini API via Frontend)
+  const extractImageWithGemini = async (file, base64Url) => {
+    setAiProcessing(true);
+    setAiError('');
+    try {
+       const base64Data = base64Url.split(',')[1];
+       const apiKey = ""; // Disuntikkan pada saat runtime di Canvas environment
+       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+       const payload = {
+         contents: [{
+           role: "user",
+           parts: [
+             { text: "Analisis screenshot chat WhatsApp ini. Ekstrak informasi calon pelanggan (prospek). Kembalikan HANYA format JSON valid tanpa tanda backticks markdown. Key yang harus ada: 'name' (string, nama pengirim jika diketahui), 'phone' (string, nomor telepon atau WA pengirim), 'nicheInfo' (string, ringkasan singkat apa yang mereka tanyakan/minati), 'value' (number, estimasi harga/budget jika disebut dalam chat, jika tidak ada isikan 0). Jika data tertentu tidak ditemukan, berikan string kosong atau 0." },
+             { inlineData: { mimeType: file.type, data: base64Data } }
+           ]
+         }],
+         generationConfig: { responseMimeType: "application/json" }
+       };
+
+       // Menggunakan fungsi fetch dengan auto-retry
+       const data = await fetchWithRetry(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+       });
+
+       const textRes = data.candidates?.[0]?.content?.parts?.[0]?.text;
+       
+       if(textRes) {
+          const parsed = JSON.parse(textRes);
+          const form = document.getElementById('lead-form');
+          if(form) {
+             if(parsed.name) form.leadName.value = parsed.name;
+             if(parsed.phone) form.phone.value = parsed.phone;
+             if(parsed.nicheInfo) form.nicheInfo.value = parsed.nicheInfo;
+             if(parsed.value) form.value.value = parsed.value;
+             form.notes.value = "Data ini diisi otomatis dari hasil baca Screenshot WhatsApp oleh AI.";
+          }
+       }
+    } catch (err) {
+       console.error("AI Error:", err);
+       setAiError("Gagal memproses gambar. Pastikan ini adalah screenshot yang jelas.");
+       setImagePreview(null);
+    } finally {
+       setAiProcessing(false);
+    }
+  };
+
+  const processImageFile = (file) => {
+    if (!file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setImagePreview(e.target.result);
+      extractImageWithGemini(file, e.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handlePaste = (e) => {
+    // Mengecek apakah yang di paste adalah File / Gambar
+    const items = e.clipboardData?.items;
+    if (items) {
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf("image") !== -1) {
+          const file = items[i].getAsFile();
+          processImageFile(file);
+          e.preventDefault(); // cegah teks terpaste ke textarea jika ada gambar
+          break;
+        }
+      }
+    }
+  };
+
+  const handleSmartExtractText = () => {
     if(!smartPaste) return;
     const form = document.getElementById('lead-form');
     if(!form) return;
 
     const text = smartPaste;
     
-    // 1. Ekstrak Nomor HP (Dimulai dari 08, 62, atau +62)
     const phoneMatch = text.match(/(?:08|\+62|62)[0-9]{7,13}/);
     if(phoneMatch) form.phone.value = phoneMatch[0];
 
-    // 2. Ekstrak Nama (Mencari kata Nama:, Name:, dll)
     const nameMatch = text.match(/(?:nama|name|sdr|bapak|ibu)\s*[:-]?\s*([^\n]+)/i);
     if(nameMatch) {
         form.leadName.value = nameMatch[1].trim();
@@ -1485,20 +1575,17 @@ const LeadFormModal = ({ appId, userId }) => {
         if(lines.length > 0) form.leadName.value = lines[0].substring(0, 30).trim();
     }
 
-    // 3. Ekstrak Nilai Rupiah
     const valueMatch = text.match(/(?:rp|harga|nilai|budget|tagihan)\s*[:-]?\s*([0-9.,]+)/i);
     if(valueMatch) {
         form.value.value = valueMatch[1].replace(/[^0-9]/g, '');
     }
 
-    // 4. Ekstrak Minat / Kebutuhan
     const minatMatch = text.match(/(?:minat|kebutuhan|info|pesan)\s*[:-]?\s*([^\n]+)/i);
     if (minatMatch) {
         form.nicheInfo.value = minatMatch[1].trim();
     }
 
-    // Sisanya dilempar ke notes
-    form.notes.value = "=== Pesan Teks Asli ===\n" + text;
+    form.notes.value = "=== Ekstrak Teks Asli ===\n" + text;
   };
 
   const handleSubmit = async (e) => {
@@ -1522,7 +1609,8 @@ const LeadFormModal = ({ appId, userId }) => {
       const newLeadId = `lead_${Date.now()}`;
       await setDoc(doc(getFirestore(), 'artifacts', appId, 'public', 'data', 'wasist_leads', newLeadId), newLead);
       setIsOpen(false);
-      setSmartPaste(''); // Reset state
+      setSmartPaste('');
+      setImagePreview(null);
     } catch (err) {
       console.error(err);
     } finally {
@@ -1535,27 +1623,65 @@ const LeadFormModal = ({ appId, userId }) => {
       <Button onClick={() => setIsOpen(true)} icon={UserPlus} className="font-bold w-full md:w-auto shadow-blue-300">Tambah Prospek</Button>
       <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="Data Prospek Baru">
         
-        {/* FITUR AUTO PASTE (BARU) */}
-        <div className="mb-6 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-blue-200/60 shadow-inner">
-           <label className="flex items-center gap-2 text-sm font-black text-blue-900 mb-2">
-             <Wand2 className="w-4 h-4 text-blue-600"/> Auto-Isi dari Copy Chat WA
-           </label>
-           <p className="text-[11px] text-blue-600 font-medium mb-3">Copy pesan klien di WhatsApp dan Paste di sini. AI sederhana kami akan mencoba mengisi form otomatis untuk Anda.</p>
-           <textarea 
-              value={smartPaste} 
-              onChange={e => setSmartPaste(e.target.value)}
-              rows="3" 
-              placeholder="Contoh: &#10;Nama: Budi Santoso&#10;No WA: 081234567890&#10;Minat: Mau pesen jasa web" 
-              className="w-full px-3 py-2 text-sm bg-white border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none mb-3 resize-none font-medium text-slate-700"
-           ></textarea>
-           <Button variant="primary" type="button" onClick={handleSmartExtract} disabled={!smartPaste} className="w-full py-2.5 text-xs font-bold shadow-md" icon={Zap}>
-             Ekstrak Data ke Form
-           </Button>
+        {/* FITUR AUTO PASTE (TEKS & GAMBAR VISION AI) */}
+        <div 
+          className="mb-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border-2 border-dashed border-blue-300 relative hover:bg-blue-100/50 transition-colors group overflow-hidden"
+          onPaste={handlePaste}
+        >
+           <input type="file" id="upload-screenshot" className="hidden" accept="image/*" onChange={(e) => {
+              if(e.target.files && e.target.files[0]) processImageFile(e.target.files[0]);
+           }} />
+
+           {aiProcessing ? (
+              <div className="flex flex-col items-center justify-center py-8">
+                 <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-3" />
+                 <p className="text-sm font-black text-blue-900">AI Sedang Membaca Screenshot...</p>
+                 <p className="text-xs text-blue-600 font-medium">Mengekstrak nama, nomor WA, dan kebutuhan prospek.</p>
+              </div>
+           ) : imagePreview ? (
+              <div className="relative rounded-xl overflow-hidden shadow-sm m-2">
+                 <img src={imagePreview} alt="Screenshot WA" className="w-full max-h-48 object-contain bg-slate-900/5 rounded-xl" />
+                 <button type="button" onClick={(e) => { e.stopPropagation(); setImagePreview(null); }} className="absolute top-2 right-2 bg-rose-500 text-white p-1.5 rounded-full hover:bg-rose-600 shadow-md">
+                    <XCircle className="w-5 h-5" />
+                 </button>
+                 <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-emerald-600 to-emerald-500 text-white text-xs font-bold py-2 text-center">
+                    <CheckCircle className="w-4 h-4 inline-block mr-1" /> Berhasil Diekstrak! Periksa form di bawah.
+                 </div>
+              </div>
+           ) : (
+              <div className="p-5 flex flex-col items-center justify-center text-center cursor-pointer" onClick={() => document.getElementById('upload-screenshot').click()}>
+                 <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center mb-3 shadow-sm group-hover:scale-110 transition-transform duration-300">
+                    <ImagePlus className="w-7 h-7 text-blue-600" />
+                 </div>
+                 <p className="text-sm font-black text-blue-900 mb-1">Upload / Paste Screenshot WA</p>
+                 <p className="text-xs text-blue-600 font-medium px-4">Tekan <kbd className="bg-white px-1.5 py-0.5 rounded shadow-sm text-slate-700">Ctrl+V</kbd> untuk paste gambar / teks percakapan klien di sini. AI akan otomatis mengisi form.</p>
+                 {aiError && <p className="text-xs text-rose-500 font-bold mt-3 p-2 bg-rose-100 rounded-lg">{aiError}</p>}
+              </div>
+           )}
+
+           {/* Fallback Input Manual Jika hanya ingin Ekstrak Teks Biasa */}
+           {!imagePreview && !aiProcessing && (
+              <div className="px-5 pb-5 pt-0">
+                 <textarea 
+                    value={smartPaste} 
+                    onChange={e => setSmartPaste(e.target.value)}
+                    rows="2" 
+                    placeholder="Atau Paste teks biasa di sini..." 
+                    className="w-full px-3 py-2 text-sm bg-white border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none mb-3 resize-none font-medium text-slate-700 relative z-10"
+                    onClick={(e) => e.stopPropagation()}
+                 ></textarea>
+                 {smartPaste && (
+                    <Button variant="primary" type="button" onClick={(e) => { e.stopPropagation(); handleSmartExtractText(); }} className="w-full py-2.5 text-xs font-bold shadow-md" icon={Zap}>
+                       Ekstrak Teks
+                    </Button>
+                 )}
+              </div>
+           )}
         </div>
 
         <div className="flex items-center gap-4 mb-6">
            <div className="h-px bg-slate-200 flex-1"></div>
-           <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Atau Isi Manual</span>
+           <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Hasil Form Prospek</span>
            <div className="h-px bg-slate-200 flex-1"></div>
         </div>
 
