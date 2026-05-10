@@ -8,7 +8,8 @@ import {
   LayoutDashboard, Users, UserPlus, PhoneForwarded, PieChart, 
   Settings, LogOut, CheckCircle, XCircle, Search, DollarSign, 
   TrendingUp, MessageCircle, AlertCircle, Calendar, Printer,
-  Filter, Activity, Smartphone, Eye, ArrowRight, Shield, BarChart, HelpCircle
+  Filter, Activity, Smartphone, Eye, ArrowRight, Shield, BarChart, HelpCircle,
+  Gift // Ditambahkan icon Gift untuk fitur Upsell produk baru
 } from 'lucide-react';
 
 // === FIREBASE SETUP (Canvas Standard & Production) ===
@@ -75,7 +76,6 @@ const Modal = ({ isOpen, onClose, title, children }) => {
 export default function WAsistApp() {
   const [firebaseUser, setFirebaseUser] = useState(null);
   
-  // FIX: Membaca Sesi Login dari Session Storage pada awal muat halaman
   const [appUser, setAppUser] = useState(() => {
     const savedSession = typeof window !== 'undefined' ? sessionStorage.getItem('wasist_auth') : null;
     if (savedSession === 'admin') return { role: 'admin', name: 'Super Admin' };
@@ -90,12 +90,14 @@ export default function WAsistApp() {
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   
-  // FIX: Menyimpan status Tab terakhir yang dibuka
   const [activeTab, setActiveTab] = useState(() => {
     return (typeof window !== 'undefined' ? sessionStorage.getItem('wasist_tab') : null) || 'dashboard';
   });
   
   const [adminViewingUser, setAdminViewingUser] = useState(null);
+
+  // State untuk menyimpan data Lead yang sedang di-Upsell
+  const [crossSellLead, setCrossSellLead] = useState(null);
 
   const [captcha, setCaptcha] = useState({ n1: 0, n2: 0 });
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
@@ -140,7 +142,6 @@ export default function WAsistApp() {
     }));
   }, [filteredChartUsers]);
 
-  // Efek untuk menyimpan activeTab ke Session Storage saat terjadi perubahan
   useEffect(() => {
     if (activeTab) sessionStorage.setItem('wasist_tab', activeTab);
   }, [activeTab]);
@@ -170,24 +171,20 @@ export default function WAsistApp() {
       const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setAllUsers(usersData);
 
-      // FIX: Sinkronisasi dan Pemulihan Akun secara Otomatis dari Firestore jika Sesi tersimpan
       const savedAuth = sessionStorage.getItem('wasist_auth');
       if (savedAuth && savedAuth !== 'admin') {
         const foundUser = usersData.find(u => u.id === savedAuth);
         if (foundUser) {
           setAppUser(prevUser => {
-            // Hanya update state jika ada perubahan data (mencegah re-render layar berkedip)
             if (!prevUser || JSON.stringify(prevUser) !== JSON.stringify(foundUser)) {
               return foundUser;
             }
             return prevUser;
           });
-          // Arahkan otomatis ke halaman pembayaran jika masih pending
           if (foundUser.status === 'pending') {
             setAuthView('payment');
           }
         } else {
-          // Bersihkan sesi jika data pengguna telah dihapus dari sistem
           sessionStorage.removeItem('wasist_auth');
           setAppUser(null);
         }
@@ -265,7 +262,7 @@ export default function WAsistApp() {
       setAuthView('payment');
       const createdUser = { ...newUser, id: newUserId };
       setAppUser(createdUser);
-      sessionStorage.setItem('wasist_auth', newUserId); // Simpan Sesi
+      sessionStorage.setItem('wasist_auth', newUserId); 
     } catch (err) {
       setErrorMsg('Terjadi kesalahan sistem. Coba lagi.');
       submitBtn.disabled = false;
@@ -293,14 +290,14 @@ export default function WAsistApp() {
     if (username === 'Admin!' && password === '@CRM#Real#1!') {
       const adminData = { role: 'admin', name: 'Super Admin' };
       setAppUser(adminData);
-      sessionStorage.setItem('wasist_auth', 'admin'); // Simpan Sesi Admin
+      sessionStorage.setItem('wasist_auth', 'admin'); 
       setActiveTab(sessionStorage.getItem('wasist_tab') || 'dashboard');
       return;
     }
 
     const user = allUsers.find(u => u.email === username && u.password === password);
     if (user) {
-      sessionStorage.setItem('wasist_auth', user.id); // Simpan Sesi Pengguna
+      sessionStorage.setItem('wasist_auth', user.id); 
       setAppUser(user);
       if (user.status === 'pending') {
         setAuthView('payment');
@@ -338,8 +335,6 @@ export default function WAsistApp() {
     setAdminViewingUser(null);
     setActiveTab('dashboard');
     setIsLogoutModalOpen(false);
-    
-    // FIX: Bersihkan Sesi Storage saat logout
     sessionStorage.removeItem('wasist_auth');
     sessionStorage.removeItem('wasist_tab');
   };
@@ -506,7 +501,6 @@ export default function WAsistApp() {
     );
   }
 
-  // === TAMPILAN DASHBOARD ADMIN PENUH ===
   if (appUser.role === 'admin' && !adminViewingUser) {
     const totalOmset = approvedUsers.reduce((sum, u) => sum + (u.paymentAmount || 249000), 0);
     const pendingUsers = allUsers.filter(u => u.status === 'pending');
@@ -597,7 +591,6 @@ export default function WAsistApp() {
                   </Card>
                 </div>
 
-                {/* --- FITUR 1: GRAFIK PENDAPATAN ADMIN --- */}
                 <Card className="mt-8 border-0 shadow-lg shadow-blue-100/50">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                     <div>
@@ -837,7 +830,6 @@ export default function WAsistApp() {
 
   const isViewMode = !!adminViewingUser;
   
-  // Pipeline grouping calculations
   const pipeline = {
     'New': userLeads.filter(l => l.status === 'New'),
     'Follow Up': userLeads.filter(l => l.status === 'Follow Up'),
@@ -852,7 +844,13 @@ export default function WAsistApp() {
   const totalCLV = pipeline['Closed Won'].reduce((sum, lead) => sum + Number(lead.value || 0), 0);
   
   const todayDateStr = new Date().toISOString().split('T')[0];
-  const reminderLeads = userLeads.filter(l => l.status !== 'Closed Won' && l.status !== 'Closed Lost' && l.followUpDate === todayDateStr);
+  
+  // FIX: Fitur Reminders sekarang juga mengecek jadwal "Upsell / Cross-Sell" untuk klien yang sudah "Closed Won"
+  const reminderLeads = userLeads.filter(l => 
+    l.followUpDate === todayDateStr && 
+    l.status !== 'Closed Lost' && 
+    (l.status !== 'Closed Won' || l.crossSellProduct)
+  );
 
   const tabsMenu = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -1001,7 +999,9 @@ export default function WAsistApp() {
                             <p className="font-bold text-slate-800 text-base">{lead.name}</p>
                             <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
                           </div>
-                          <p className="text-xs font-medium text-slate-500 mt-0.5">{lead.nicheInfo || 'Prospek potensial'}</p>
+                          <p className="text-xs font-medium text-slate-500 mt-0.5">
+                             {lead.crossSellProduct ? `Upsell: Penawaran ${lead.crossSellProduct}` : (lead.nicheInfo || 'Prospek potensial')}
+                          </p>
                         </div>
                         <OneClickWA lead={lead} userNiche={currentUserData.niche} />
                       </div>
@@ -1051,9 +1051,24 @@ export default function WAsistApp() {
                               <Calendar className="w-3.5 h-3.5 text-blue-500"/> {lead.followUpDate}
                             </span>
                           ) : <span className="text-slate-300">-</span>}
+                          
+                          {/* Label indikator jika ada target Upsell */}
+                          {lead.crossSellProduct && (
+                             <div className="mt-1.5 text-[10px] font-bold text-purple-600 bg-purple-50 inline-block px-1.5 py-0.5 rounded border border-purple-100">
+                               + Upsell Produk Baru
+                             </div>
+                          )}
                         </td>
-                        <td className="px-6 py-4 text-right">
-                          <OneClickWA lead={lead} userNiche={currentUserData.niche} />
+                        <td className="px-6 py-4">
+                          <div className="flex items-center justify-end gap-2">
+                            {/* FIX: Tombol Upsell Baru untuk Lead "Closed Won" */}
+                            {lead.status === 'Closed Won' && (
+                               <Button variant="outline" onClick={() => setCrossSellLead(lead)} className="px-3 py-1.5 text-xs border-purple-200 text-purple-600 hover:bg-purple-50 hover:border-purple-300 font-bold" icon={Gift}>
+                                 Upsell
+                               </Button>
+                            )}
+                            <OneClickWA lead={lead} userNiche={currentUserData.niche} />
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1115,9 +1130,16 @@ export default function WAsistApp() {
                       <div className="flex flex-wrap items-center gap-3 mb-2">
                         <h3 className="font-black text-slate-800 text-xl">{lead.name}</h3>
                         <StatusBadge status={lead.status} />
+                        
+                        {/* FIX: Badge Label jika ini adalah Follow-up Upsell Produk Baru */}
+                        {lead.status === 'Closed Won' && lead.crossSellProduct && (
+                          <span className="bg-purple-100 text-purple-700 text-[10px] uppercase font-black px-2 py-0.5 rounded-lg border border-purple-200 shadow-sm flex items-center gap-1.5">
+                            <Gift className="w-3.5 h-3.5"/> Upsell: {lead.crossSellProduct}
+                          </span>
+                        )}
                       </div>
                       <p className="text-sm font-bold text-slate-500 flex items-center gap-1.5"><Smartphone className="w-4 h-4 text-slate-400"/> {lead.phone}</p>
-                      {lead.notes && (
+                      {lead.notes && !lead.crossSellProduct && (
                          <div className="mt-3 bg-amber-50/50 p-3 rounded-xl border border-amber-100/50">
                            <p className="text-xs font-bold text-amber-800 uppercase mb-0.5 tracking-wider">Catatan:</p>
                            <p className="text-sm text-slate-600 font-medium">{lead.notes}</p>
@@ -1195,6 +1217,9 @@ export default function WAsistApp() {
         </div>
       </main>
 
+      {/* Komponen Modal untuk menambahkan jadwal Upsell */}
+      <CrossSellModal lead={crossSellLead} onClose={() => setCrossSellLead(null)} appId={appId} />
+
       {/* MOBILE BOTTOM NAVIGATION USER (Tampil Hanya di HP) */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-slate-200 z-50 flex justify-around items-center p-2 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
         {tabsMenu.map(item => {
@@ -1253,14 +1278,28 @@ const StatusBadge = ({ status }) => {
   );
 };
 
-// Fitur 10: One-Click WhatsApp Chat
+// Fitur 10 & Upsell: One-Click WhatsApp Chat
 const OneClickWA = ({ lead, userNiche, compact = false, showText = false }) => {
   const generateMessage = () => {
     let msg = `Halo Bapak/Ibu ${lead.name},\n`;
-    if (lead.status === 'New') msg += `Saya dari layanan ${userNiche}. Apakah Bapak/Ibu memiliki waktu untuk berdiskusi singkat mengenai penawaran kami?`;
-    else if (lead.status === 'Follow Up') msg += `Menindaklanjuti pembicaraan kita sebelumnya mengenai ${userNiche}, apakah ada pertanyaan lebih lanjut yang bisa saya bantu jawab?`;
-    else if (lead.status === 'Negotiation') msg += `Terkait proposal ${userNiche} yang telah kami ajukan, kami siap memberikan solusi terbaik. Bagaimana tanggapan Bapak/Ibu?`;
-    else msg += `Terima kasih atas kepercayaannya menggunakan layanan ${userNiche} kami.`;
+    
+    // FIX: Pesan khusus jika jadwal ini adalah penawaran Upsell / Produk Baru
+    if (lead.status === 'Closed Won' && lead.crossSellProduct) {
+       msg += `Terima kasih telah mempercayakan layanan ${userNiche} sebelumnya. Saat ini kami memiliki penawaran spesial untuk produk/layanan terbaru kami, yaitu *${lead.crossSellProduct}*. Apakah Bapak/Ibu berkenan untuk berdiskusi sejenak mengenai penawaran ini?`;
+    } 
+    else if (lead.status === 'New') {
+       msg += `Saya dari layanan ${userNiche}. Apakah Bapak/Ibu memiliki waktu untuk berdiskusi singkat mengenai penawaran kami?`;
+    } 
+    else if (lead.status === 'Follow Up') {
+       msg += `Menindaklanjuti pembicaraan kita sebelumnya mengenai ${userNiche}, apakah ada pertanyaan lebih lanjut yang bisa saya bantu jawab?`;
+    } 
+    else if (lead.status === 'Negotiation') {
+       msg += `Terkait proposal ${userNiche} yang telah kami ajukan, kami siap memberikan solusi terbaik. Bagaimana tanggapan Bapak/Ibu?`;
+    } 
+    else {
+       msg += `Terima kasih atas kepercayaannya menggunakan layanan ${userNiche} kami.`;
+    }
+    
     return encodeURIComponent(msg);
   };
 
@@ -1282,6 +1321,54 @@ const OneClickWA = ({ lead, userNiche, compact = false, showText = false }) => {
         {showText ? 'Kirim Pesan WA' : 'Chat via WA'}
       </Button>
     </a>
+  );
+};
+
+// Fitur Baru: Modal Cross-Sell / Upsell untuk produk baru
+const CrossSellModal = ({ appId, lead, onClose }) => {
+  const [loading, setLoading] = useState(false);
+  
+  if (!lead) return null;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    const form = e.target;
+    
+    try {
+      await updateDoc(doc(getFirestore(), 'artifacts', appId, 'public', 'data', 'wasist_leads', lead.id), {
+        crossSellProduct: form.productName.value,
+        followUpDate: form.followUpDate.value
+      });
+      onClose();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal isOpen={!!lead} onClose={onClose} title="Tawarkan Produk Baru">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 mb-4 flex gap-3 items-start">
+          <Gift className="w-6 h-6 text-purple-600 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-purple-800 font-medium">Anda akan menjadwalkan penawaran produk baru/upsell untuk klien <strong>{lead.name}</strong> yang sebelumnya sudah berhasil Deal.</p>
+        </div>
+        <div>
+          <label className="block text-sm font-bold text-slate-700 mb-1.5">Nama Produk / Layanan Baru</label>
+          <input name="productName" required placeholder="Contoh: Paket Maintenance Website" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white outline-none transition-all font-medium" defaultValue={lead.crossSellProduct || ''} />
+        </div>
+        <div>
+          <label className="block text-sm font-bold text-slate-700 mb-1.5">Jadwal Penawaran Ulang</label>
+          <input name="followUpDate" type="date" required className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white outline-none transition-all font-medium text-slate-700" defaultValue={lead.followUpDate || ''} />
+        </div>
+        <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
+          <Button variant="ghost" onClick={onClose} className="font-bold">Batal</Button>
+          <Button type="submit" disabled={loading} className="font-bold bg-purple-600 hover:bg-purple-700 text-white border-0 shadow-md shadow-purple-200">{loading ? 'Menyimpan...' : 'Jadwalkan Penawaran'}</Button>
+        </div>
+      </form>
+    </Modal>
   );
 };
 
