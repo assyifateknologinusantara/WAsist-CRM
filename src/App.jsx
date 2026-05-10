@@ -1496,7 +1496,7 @@ const LeadFormModal = ({ appId, userId }) => {
          contents: [{
            role: "user",
            parts: [
-             { text: "Anda adalah asisten cerdas yang sangat ahli membaca screenshot WhatsApp seperti manusia.\n\nTugas Anda:\n1. NAMA (name): Baca teks di bagian PALING ATAS layar (header profil kontak). Jika isinya berupa huruf (nama orang/toko), itu adalah namanya. Jika isinya angka (+62/08...), berarti namanya tidak disave, maka carilah nama di dalam isi chat (misal 'Halo saya Budi'). Jika tetap tidak ada, biarkan kosong.\n2. NOMOR WA (phone): Cari nomor telepon di bagian header atas ATAU di dalam isi pesan. Hapus spasi/strip/+, ambil urutan angkanya saja.\n3. KEBUTUHAN (nicheInfo): Baca isi percakapan (teks di dalam gelembung chat). Apa yang dibahas? Apa yang ditanyakan atau ingin dipesan klien? Tulis ringkasan singkatnya.\n4. NILAI (value): Jika klien menyebutkan nominal uang, tulis angka bulatnya. Jika tidak, tulis 0." },
+             { text: "Anda adalah asisten cerdas yang sangat ahli membaca screenshot WhatsApp seperti manusia.\n\nTugas Anda:\n1. NAMA (name): Baca teks di bagian PALING ATAS layar (header profil kontak). Jika isinya berupa huruf (nama orang/toko), itu adalah namanya. Jika isinya angka (+62/08...), berarti namanya tidak disave, maka carilah nama di dalam isi chat (misal 'Halo saya Budi'). Jika tetap tidak ada, biarkan kosong.\n2. NOMOR WA (phone): Cari nomor telepon di bagian header atas ATAU di dalam isi pesan. Hapus spasi/strip/+, ambil urutan angkanya saja.\n3. KEBUTUHAN (nicheInfo): Baca isi percakapan (teks di dalam gelembung chat). Apa yang dibahas? Apa yang ditanyakan atau ingin dipesan klien? Tulis ringkasan singkatnya.\n4. NILAI (value): Jika klien menyebutkan nominal uang, tulis angka bulatnya. Jika tidak, tulis 0.\n\nKEMBALIKAN HANYA OBJEK JSON MURNI TANPA TEKS LAIN." },
              { inlineData: { mimeType: file.type, data: base64Data } }
            ]
          }],
@@ -1525,35 +1525,39 @@ const LeadFormModal = ({ appId, userId }) => {
        let textRes = data.candidates?.[0]?.content?.parts?.[0]?.text;
        
        if(textRes) {
-          // PEMBERSIHAN PENTING: AI kadang tetap mengirim markdown meskipun disuruh kirim JSON
-          textRes = textRes.replace(/```json/gi, '').replace(/```/g, '').trim();
+          // PEMBERSIHAN EKSTREM: Hanya mengambil isi di dalam tanda kurung kurawal {...}
+          const jsonMatch = textRes.match(/\{[\s\S]*\}/);
           
-          const parsed = JSON.parse(textRes);
-          const form = document.getElementById('lead-form');
-          if(form) {
-             // Fallback cerdas di sisi frontend: Jika nama kosong atau tidak dikenali, gunakan nomor telepon
-             let finalName = parsed.name?.trim();
-             if (!finalName || finalName.toLowerCase() === 'tidak diketahui' || finalName === '-' || finalName.toLowerCase() === 'null') {
-               finalName = parsed.phone?.trim() || 'Prospek Baru';
-             }
+          if (jsonMatch) {
+             const parsed = JSON.parse(jsonMatch[0]);
+             const form = document.getElementById('lead-form');
+             if(form) {
+                // Fallback cerdas di sisi frontend: Jika nama kosong atau tidak dikenali, gunakan nomor telepon
+                let finalName = parsed.name?.trim();
+                if (!finalName || finalName.toLowerCase() === 'tidak diketahui' || finalName === '-' || finalName.toLowerCase() === 'null') {
+                  finalName = parsed.phone?.trim() || 'Prospek Baru';
+                }
 
-             let finalPhone = parsed.phone?.trim();
-             if (!finalPhone || finalPhone.toLowerCase() === 'tidak diketahui' || finalPhone === '-') {
-               finalPhone = '';
-             }
+                let finalPhone = parsed.phone?.trim();
+                if (!finalPhone || finalPhone.toLowerCase() === 'tidak diketahui' || finalPhone === '-') {
+                  finalPhone = '';
+                }
 
-             form.leadName.value = finalName;
-             form.phone.value = finalPhone;
-             form.nicheInfo.value = parsed.nicheInfo || '';
-             form.value.value = parsed.value !== undefined ? parsed.value : 0;
-             form.notes.value = "Data ini diisi otomatis dari hasil analisis cerdas Screenshot WhatsApp oleh AI.";
+                form.leadName.value = finalName;
+                form.phone.value = finalPhone;
+                form.nicheInfo.value = parsed.nicheInfo || '';
+                form.value.value = parsed.value !== undefined ? parsed.value : 0;
+                form.notes.value = "Data ini diisi otomatis dari hasil analisis cerdas Screenshot WhatsApp oleh AI.";
+             }
+          } else {
+             throw new Error("Format JSON tidak ditemukan dalam respon AI");
           }
        } else {
           throw new Error("Respon AI kosong");
        }
     } catch (err) {
        console.error("AI Error:", err);
-       setAiError("Gagal memproses gambar. Pastikan gambar jelas dan formatnya didukung.");
+       setAiError("Gagal mengekstrak data dari gambar. Pastikan gambar jelas dan formatnya didukung.");
        setImagePreview(null);
     } finally {
        setAiProcessing(false);
