@@ -197,6 +197,7 @@ export default function WAsistApp() {
 
     if (username === 'Admin!' && password === '@CRM#Real#1!') {
       setAppUser({ role: 'admin', name: 'Super Admin' });
+      setActiveTab('dashboard'); // Default admin tab
       return;
     }
 
@@ -207,6 +208,7 @@ export default function WAsistApp() {
         setAppUser({ ...user, pendingPayment: true });
       } else {
         setAppUser(user);
+        setActiveTab('dashboard');
       }
     } else {
       setErrorMsg('Kredensial tidak valid atau salah password!');
@@ -329,10 +331,11 @@ export default function WAsistApp() {
     );
   }
 
-  // === TAMPILAN DASHBOARD ADMIN ===
+  // === TAMPILAN DASHBOARD ADMIN PENUH ===
   if (appUser.role === 'admin' && !adminViewingUser) {
-    const totalOmset = allUsers.filter(u => u.status === 'approved').reduce((sum, u) => sum + (u.paymentAmount || 249000), 0);
-    const pendingUsers = allUsers.filter(u => u.status === 'pending').length;
+    const approvedUsers = allUsers.filter(u => u.status === 'approved');
+    const totalOmset = approvedUsers.reduce((sum, u) => sum + (u.paymentAmount || 249000), 0);
+    const pendingUsers = allUsers.filter(u => u.status === 'pending');
 
     const approveUser = async (id) => {
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'wasist_users', id), { status: 'approved' });
@@ -340,17 +343,33 @@ export default function WAsistApp() {
 
     return (
       <div className="flex h-screen bg-slate-50">
+        
+        {/* Sidebar Desktop Admin */}
         <div className="w-64 bg-slate-900 text-white p-6 flex-col hidden md:flex shadow-2xl z-20">
           <div className="flex items-center gap-3 mb-10">
             <div className="bg-blue-500/20 p-2 rounded-xl border border-blue-400/30">
               <Settings className="w-7 h-7 text-blue-400" />
             </div>
-            <h1 className="text-xl font-bold tracking-tight">Admin Panel</h1>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight">Admin Panel</h1>
+              <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">Superuser</p>
+            </div>
           </div>
           <nav className="flex-1 space-y-2">
-            <button className="flex items-center gap-3 w-full p-3.5 rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-900/50 font-medium transition-all"><Users className="w-5 h-5"/> Kelola Pengguna</button>
+            <button onClick={() => setActiveTab('dashboard')} className={`flex items-center gap-3 w-full p-3.5 rounded-xl font-medium transition-all duration-300 ${activeTab === 'dashboard' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+              <LayoutDashboard className="w-5 h-5"/> Overview
+            </button>
+            <button onClick={() => setActiveTab('users')} className={`flex items-center gap-3 w-full p-3.5 rounded-xl font-medium transition-all duration-300 ${activeTab === 'users' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+              <Users className="w-5 h-5"/> Data Pengguna
+              {pendingUsers.length > 0 && <span className="ml-auto bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{pendingUsers.length}</span>}
+            </button>
+            <button onClick={() => setActiveTab('reports')} className={`flex items-center gap-3 w-full p-3.5 rounded-xl font-medium transition-all duration-300 ${activeTab === 'reports' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+              <PieChart className="w-5 h-5"/> Laporan Omset
+            </button>
           </nav>
-          <button onClick={handleLogout} className="flex items-center gap-3 p-3 text-slate-400 hover:text-white mt-auto hover:bg-slate-800 rounded-xl transition-all"><LogOut className="w-5 h-5"/> Logout</button>
+          <button onClick={handleLogout} className="flex items-center gap-3 p-3.5 text-slate-400 hover:text-rose-400 mt-auto hover:bg-slate-800 rounded-xl transition-all font-medium">
+            <LogOut className="w-5 h-5"/> Logout Sistem
+          </button>
         </div>
 
         <div className="flex-1 overflow-auto relative pb-24 md:pb-0">
@@ -363,106 +382,209 @@ export default function WAsistApp() {
               </div>
               <span className="font-black text-lg tracking-tight">Admin Panel</span>
             </div>
-            <button onClick={handleLogout} className="text-slate-400 hover:text-rose-400 bg-slate-800 p-2 rounded-xl border border-slate-700 transition-colors">
-              <LogOut className="w-5 h-5"/>
-            </button>
           </div>
 
-          <div className="p-4 md:p-8">
-            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-8">
-              <div>
-                <h2 className="text-2xl font-black text-slate-800">Dashboard Statistik</h2>
-                <p className="text-slate-500 text-sm mt-1">Pantau pendaftar dan omset WAsist Anda.</p>
-              </div>
-              <Button onClick={() => window.print()} variant="outline" icon={Printer}>Cetak Laporan</Button>
-            </div>
+          <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            
+            {activeTab === 'dashboard' && (
+              <>
+                <div className="mb-6">
+                  <h2 className="text-2xl md:text-3xl font-black text-slate-800">Dashboard Statistik</h2>
+                  <p className="text-slate-500 text-sm md:text-base mt-1">Pantau performa penjualan dan pendaftar WAsist.</p>
+                </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <Card className="bg-gradient-to-br from-blue-600 to-blue-800 text-white border-none shadow-xl shadow-blue-200">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-blue-100 mb-1 font-medium text-sm">Total Omset Penjualan</p>
-                    <h3 className="text-3xl font-black tracking-tight">Rp {totalOmset.toLocaleString('id-ID')}</h3>
-                  </div>
-                  <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm"><TrendingUp className="w-6 h-6" /></div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                  <Card className="bg-gradient-to-br from-blue-600 to-blue-800 text-white border-none shadow-xl shadow-blue-200">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-blue-100 mb-1 font-medium text-sm">Total Omset Penjualan</p>
+                        <h3 className="text-3xl font-black tracking-tight">Rp {totalOmset.toLocaleString('id-ID')}</h3>
+                      </div>
+                      <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm"><TrendingUp className="w-6 h-6" /></div>
+                    </div>
+                  </Card>
+                  <Card>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-slate-500 mb-1 font-medium text-sm">Total Pengguna Aktif</p>
+                        <h3 className="text-3xl font-black text-slate-800">{approvedUsers.length}</h3>
+                      </div>
+                      <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl"><CheckCircle className="w-6 h-6" /></div>
+                    </div>
+                  </Card>
+                  <Card>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-slate-500 mb-1 font-medium text-sm">Menunggu Approval</p>
+                        <h3 className="text-3xl font-black text-slate-800">{pendingUsers.length}</h3>
+                      </div>
+                      <div className="p-3 bg-amber-100 text-amber-600 rounded-xl"><AlertCircle className="w-6 h-6" /></div>
+                    </div>
+                  </Card>
                 </div>
-              </Card>
-              <Card>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-slate-500 mb-1 font-medium text-sm">Total Pengguna Aktif</p>
-                    <h3 className="text-3xl font-black text-slate-800">{allUsers.filter(u => u.status === 'approved').length}</h3>
-                  </div>
-                  <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl"><CheckCircle className="w-6 h-6" /></div>
-                </div>
-              </Card>
-              <Card>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-slate-500 mb-1 font-medium text-sm">Menunggu Approval</p>
-                    <h3 className="text-3xl font-black text-slate-800">{pendingUsers}</h3>
-                  </div>
-                  <div className="p-3 bg-amber-100 text-amber-600 rounded-xl"><AlertCircle className="w-6 h-6" /></div>
-                </div>
-              </Card>
-            </div>
 
-            <Card className="p-0 overflow-hidden border-0">
-              <div className="p-6 border-b border-slate-100 bg-white">
-                 <h3 className="text-lg font-bold text-slate-800">Daftar Pendaftar WAsist</h3>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-100">
-                    <tr>
-                      <th className="px-6 py-4">Nama / Email</th>
-                      <th className="px-6 py-4">Bisnis (Niche)</th>
-                      <th className="px-6 py-4">Tagihan</th>
-                      <th className="px-6 py-4">Status</th>
-                      <th className="px-6 py-4 text-right">Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50 bg-white">
-                    {allUsers.map(user => (
-                      <tr key={user.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="font-bold text-slate-800 text-base">{user.name}</div>
-                          <div className="text-slate-500 text-xs mt-0.5">{user.email}</div>
-                        </td>
-                        <td className="px-6 py-4 font-medium text-slate-700">{user.niche}</td>
-                        <td className="px-6 py-4 font-mono font-medium text-slate-700 bg-slate-50/50">Rp {user.paymentAmount?.toLocaleString('id-ID')}</td>
-                        <td className="px-6 py-4">
-                          <span className={`px-3 py-1.5 text-xs rounded-lg font-bold uppercase tracking-wider ${user.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                            {user.status === 'approved' ? 'Aktif' : 'Pending'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 flex justify-end gap-2">
-                          {user.status === 'pending' && (
-                            <Button onClick={() => approveUser(user.id)} variant="success" className="px-3 py-1.5 text-xs">Approve</Button>
-                          )}
-                          <Button onClick={() => setAdminViewingUser(user)} variant="outline" className="px-3 py-1.5 text-xs bg-white" icon={Eye}>Lihat Dashboard</Button>
-                        </td>
-                      </tr>
-                    ))}
-                    {allUsers.length === 0 && (
-                      <tr><td colSpan="5" className="text-center py-10 text-slate-500 font-medium">Belum ada pengguna terdaftar.</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
+                {pendingUsers.length > 0 && (
+                  <Card className="p-0 border-0 overflow-hidden shadow-lg shadow-rose-100/50 mt-8">
+                    <div className="p-5 border-b border-rose-100 bg-rose-50 flex justify-between items-center">
+                       <h3 className="font-bold text-rose-900 flex items-center gap-2"><AlertCircle className="w-5 h-5"/> Perlu Approval Segera</h3>
+                       <button onClick={() => setActiveTab('users')} className="text-sm font-bold text-rose-600 hover:text-rose-800 hover:underline">Kelola Semua</button>
+                    </div>
+                    <div className="divide-y divide-rose-100/50">
+                      {pendingUsers.slice(0, 3).map(user => (
+                        <div key={user.id} className="p-4 flex items-center justify-between bg-white">
+                          <div>
+                            <p className="font-bold text-slate-800">{user.name}</p>
+                            <p className="text-xs text-slate-500">{user.email} • Tagihan: Rp {user.paymentAmount?.toLocaleString('id-ID')}</p>
+                          </div>
+                          <Button onClick={() => approveUser(user.id)} variant="success" className="px-3 py-1.5 text-xs">Approve</Button>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                )}
+              </>
+            )}
+
+            {activeTab === 'users' && (
+              <>
+                <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-6">
+                  <div>
+                    <h2 className="text-2xl md:text-3xl font-black text-slate-800">Manajemen Pengguna</h2>
+                    <p className="text-slate-500 text-sm md:text-base mt-1">Kelola akses, persetujuan, dan dashboard klien.</p>
+                  </div>
+                </div>
+
+                <Card className="p-0 overflow-hidden border-0 shadow-lg shadow-slate-200/40">
+                  <div className="p-5 border-b border-slate-100 bg-white">
+                    <h3 className="text-lg font-bold text-slate-800">Daftar Semua Pendaftar</h3>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-100">
+                        <tr>
+                          <th className="px-6 py-4">Nama / Email</th>
+                          <th className="px-6 py-4">Bisnis (Niche)</th>
+                          <th className="px-6 py-4">Tagihan</th>
+                          <th className="px-6 py-4">Status</th>
+                          <th className="px-6 py-4 text-right">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50 bg-white">
+                        {allUsers.map(user => (
+                          <tr key={user.id} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="px-6 py-4">
+                              <div className="font-bold text-slate-800 text-base">{user.name}</div>
+                              <div className="text-slate-500 text-xs mt-0.5">{user.email}</div>
+                            </td>
+                            <td className="px-6 py-4 font-medium text-slate-700">{user.niche}</td>
+                            <td className="px-6 py-4 font-mono font-medium text-slate-700 bg-slate-50/50">Rp {user.paymentAmount?.toLocaleString('id-ID')}</td>
+                            <td className="px-6 py-4">
+                              <span className={`px-3 py-1.5 text-xs rounded-lg font-bold uppercase tracking-wider ${user.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                {user.status === 'approved' ? 'Aktif' : 'Pending'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 flex justify-end gap-2">
+                              {user.status === 'pending' && (
+                                <Button onClick={() => approveUser(user.id)} variant="success" className="px-3 py-1.5 text-xs">Approve</Button>
+                              )}
+                              <Button onClick={() => setAdminViewingUser(user)} variant="outline" className="px-3 py-1.5 text-xs bg-white" icon={Eye}>Lihat Dashboard</Button>
+                            </td>
+                          </tr>
+                        ))}
+                        {allUsers.length === 0 && (
+                          <tr><td colSpan="5" className="text-center py-10 text-slate-500 font-medium">Belum ada pengguna terdaftar.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              </>
+            )}
+
+            {activeTab === 'reports' && (
+              <>
+                <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-6">
+                  <div>
+                    <h2 className="text-2xl md:text-3xl font-black text-slate-800">Laporan Omset</h2>
+                    <p className="text-slate-500 text-sm md:text-base mt-1">Rekapitulasi pembayaran dari seluruh pengguna aktif.</p>
+                  </div>
+                  <Button onClick={() => window.print()} variant="outline" icon={Printer} className="border-slate-300 font-bold">Cetak Laporan</Button>
+                </div>
+
+                <Card className="p-0 overflow-hidden border-0 shadow-lg shadow-slate-200/40">
+                  <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white flex justify-between items-center">
+                    <h3 className="text-lg font-bold text-slate-800">Rincian Pendapatan</h3>
+                    <div className="text-right">
+                       <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Total Diterima</p>
+                       <p className="text-2xl font-black text-emerald-600">Rp {totalOmset.toLocaleString('id-ID')}</p>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-100">
+                        <tr>
+                          <th className="px-6 py-4 uppercase text-[11px] tracking-wider">Tanggal Daftar</th>
+                          <th className="px-6 py-4 uppercase text-[11px] tracking-wider">Nama Pengguna</th>
+                          <th className="px-6 py-4 uppercase text-[11px] tracking-wider">Status Pembayaran</th>
+                          <th className="px-6 py-4 uppercase text-[11px] tracking-wider text-right">Nominal (Rp)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50 bg-white">
+                        {approvedUsers.map(user => (
+                          <tr key={user.id} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="px-6 py-4 font-medium text-slate-600">
+                              {user.createdAt ? new Date(user.createdAt).toLocaleDateString('id-ID') : '-'}
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="font-bold text-slate-800">{user.name}</div>
+                              <div className="text-slate-500 text-xs mt-0.5">{user.email}</div>
+                            </td>
+                            <td className="px-6 py-4">
+                               <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-600"><CheckCircle className="w-4 h-4"/> Lunas</span>
+                            </td>
+                            <td className="px-6 py-4 font-mono font-bold text-slate-800 text-right">
+                              {user.paymentAmount?.toLocaleString('id-ID')}
+                            </td>
+                          </tr>
+                        ))}
+                        {approvedUsers.length === 0 && (
+                          <tr><td colSpan="4" className="text-center py-10 text-slate-500 font-medium">Belum ada pendapatan terekam.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              </>
+            )}
+
           </div>
         </div>
 
         {/* MOBILE BOTTOM NAVIGATION ADMIN (Tampil Hanya di HP) */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 text-white border-t border-slate-800 z-50 flex justify-around items-center p-2 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.2)]">
-          <button className="relative flex flex-col items-center justify-center w-full py-2 text-blue-400">
-            <div className="p-1.5 rounded-xl bg-blue-500/20 scale-110">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 text-white border-t border-slate-800 z-50 flex justify-around items-center p-2 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.5)]">
+          <button onClick={() => setActiveTab('dashboard')} className={`relative flex flex-col items-center justify-center w-full py-2 ${activeTab === 'dashboard' ? 'text-blue-400' : 'text-slate-500 hover:text-slate-300'}`}>
+            <div className={`p-1.5 rounded-xl transition-all ${activeTab === 'dashboard' ? 'bg-blue-500/20 scale-110' : ''}`}>
+              <LayoutDashboard className="w-5 h-5" />
+            </div>
+            <span className="text-[10px] font-bold mt-1 tracking-wide">Overview</span>
+          </button>
+          
+          <button onClick={() => setActiveTab('users')} className={`relative flex flex-col items-center justify-center w-full py-2 ${activeTab === 'users' ? 'text-blue-400' : 'text-slate-500 hover:text-slate-300'}`}>
+            <div className={`p-1.5 rounded-xl transition-all ${activeTab === 'users' ? 'bg-blue-500/20 scale-110' : ''}`}>
               <Users className="w-5 h-5" />
             </div>
             <span className="text-[10px] font-bold mt-1 tracking-wide">Pengguna</span>
+            {pendingUsers.length > 0 && <span className="absolute top-1 right-5 bg-rose-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">{pendingUsers.length}</span>}
           </button>
-          <button onClick={handleLogout} className="relative flex flex-col items-center justify-center w-full py-2 text-slate-400 hover:text-rose-400 transition-colors">
+
+          <button onClick={() => setActiveTab('reports')} className={`relative flex flex-col items-center justify-center w-full py-2 ${activeTab === 'reports' ? 'text-blue-400' : 'text-slate-500 hover:text-slate-300'}`}>
+            <div className={`p-1.5 rounded-xl transition-all ${activeTab === 'reports' ? 'bg-blue-500/20 scale-110' : ''}`}>
+              <PieChart className="w-5 h-5" />
+            </div>
+            <span className="text-[10px] font-bold mt-1 tracking-wide">Laporan</span>
+          </button>
+
+          <button onClick={handleLogout} className="relative flex flex-col items-center justify-center w-full py-2 text-slate-500 hover:text-rose-400 transition-colors">
             <div className="p-1.5 rounded-xl">
               <LogOut className="w-5 h-5" />
             </div>
@@ -504,7 +626,7 @@ export default function WAsistApp() {
   return (
     <div className="flex h-screen bg-slate-50 font-sans text-slate-800">
       
-      {/* Sidebar Desktop */}
+      {/* Sidebar Desktop User */}
       <aside className="w-64 bg-white border-r border-slate-200 flex-col hidden md:flex z-20 shadow-sm">
         <div className="p-6 border-b border-slate-100 flex items-center gap-3">
           <div className="bg-gradient-to-br from-blue-600 to-indigo-600 p-2 rounded-xl text-white shadow-md shadow-blue-200">
@@ -546,7 +668,7 @@ export default function WAsistApp() {
 
         <div className="p-4 border-t border-slate-100">
           {isViewMode ? (
-             <Button onClick={() => setAdminViewingUser(null)} variant="outline" className="w-full text-xs font-bold border-slate-300">Kembali ke Admin</Button>
+             <Button onClick={() => { setAdminViewingUser(null); setActiveTab('dashboard'); }} variant="outline" className="w-full text-xs font-bold border-slate-300">Kembali ke Admin</Button>
           ) : (
              <Button onClick={handleLogout} variant="ghost" className="w-full text-rose-600 hover:bg-rose-50 font-bold" icon={LogOut}>Logout Sistem</Button>
           )}
@@ -554,7 +676,6 @@ export default function WAsistApp() {
       </aside>
 
       {/* Main Content Area */}
-      {/* pb-24 ditambahkan agar konten tidak tertutup Bottom Nav di Mobile */}
       <main className="flex-1 overflow-auto bg-slate-50/50 relative pb-24 md:pb-0">
         
         {/* Mobile Header Top */}
@@ -566,7 +687,7 @@ export default function WAsistApp() {
             <span className="font-black text-lg tracking-tight">WAsist</span>
           </div>
           {isViewMode ? (
-             <button onClick={() => setAdminViewingUser(null)} className="text-xs font-bold bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg">Back Admin</button>
+             <button onClick={() => { setAdminViewingUser(null); setActiveTab('dashboard'); }} className="text-xs font-bold bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg">Back Admin</button>
           ) : (
              <button onClick={handleLogout} className="text-slate-400 hover:text-rose-500 bg-slate-50 p-2 rounded-xl border border-slate-100"><LogOut className="w-5 h-5"/></button>
           )}
@@ -835,7 +956,7 @@ export default function WAsistApp() {
         </div>
       </main>
 
-      {/* MOBILE BOTTOM NAVIGATION (Tampil Hanya di HP) */}
+      {/* MOBILE BOTTOM NAVIGATION USER (Tampil Hanya di HP) */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-slate-200 z-50 flex justify-around items-center p-2 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
         {tabsMenu.map(item => {
           const isActive = activeTab === item.id;
