@@ -1496,7 +1496,7 @@ const LeadFormModal = ({ appId, userId }) => {
          contents: [{
            role: "user",
            parts: [
-             { text: "Tolong ekstrak informasi prospek dari screenshot WhatsApp ini. Perhatikan secara detail header (nama kontak/nomor di bagian atas) dan isi pesannya (mungkin prospek menyebutkan nama dan pertanyaannya)." },
+             { text: "Anda adalah AI ekstraktor data CRM khusus WhatsApp. Pindai seluruh teks yang ada di gambar (Header atas dan isi obrolan). \n1. Cari NOMOR HP prospek (ada di bagian atas/header atau di dalam obrolan teks). Ubah format menjadi angka saja tanpa spasi/strip.\n2. Cari NAMA prospek. Jika TIDAK ADA nama yang tertera, Anda WAJIB menggunakan Nomor HP tersebut sebagai 'name'. JANGAN biarkan nama kosong.\n3. Rangkum inti percakapan di nicheInfo." },
              { inlineData: { mimeType: file.type, data: base64Data } }
            ]
          }],
@@ -1505,10 +1505,10 @@ const LeadFormModal = ({ appId, userId }) => {
            responseSchema: {
              type: "OBJECT",
              properties: {
-               name: { type: "STRING", description: "Nama prospek. Cari di bagian paling atas layar obrolan, atau jika prospek memperkenalkan namanya di dalam pesan. Jika tidak ditemukan nama, kosongkan." },
-               phone: { type: "STRING", description: "Nomor WhatsApp/telepon prospek. Cari di bagian atas layar obrolan atau di teks pesan. Bersihkan dari spasi/strip, hanya angka (misal: 0812... atau 6281...)." },
-               nicheInfo: { type: "STRING", description: "Ringkasan inti (1-2 kalimat) tentang layanan atau produk yang diminati/dipesan oleh prospek." },
-               value: { type: "INTEGER", description: "Jika ada penyebutan harga, budget, tagihan, atau nilai (dalam angka bulat rupiah), tulis angkanya saja. Jika tidak ada, tulis 0." }
+               name: { type: "STRING", description: "Nama pengirim. Jika tidak ada nama yang disebutkan atau di header, ISI VALUE INI DENGAN NOMOR HP MEREKA. Parameter ini wajib ada isinya." },
+               phone: { type: "STRING", description: "Nomor telepon/WA klien. Diekstrak dari header aplikasi atau teks percakapan. Hasilkan dalam format deretan angka." },
+               nicheInfo: { type: "STRING", description: "Ringkasan maksud/tujuan chat dari klien." },
+               value: { type: "INTEGER", description: "Estimasi nominal uang (jika disebut). Jika tidak ada, isikan 0." }
              },
              required: ["name", "phone", "nicheInfo", "value"]
            }
