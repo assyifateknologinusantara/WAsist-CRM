@@ -87,6 +87,13 @@ export default function WAsistApp() {
   // Admin View State
   const [adminViewingUser, setAdminViewingUser] = useState(null);
 
+  // --- PERBAIKAN: Hook useMemo harus dipanggil di atas sebelum if() return ---
+  const currentUserData = adminViewingUser || appUser || {};
+  const userLeads = useMemo(() => {
+    if (!currentUserData.id) return [];
+    return allLeads.filter(l => l.userId === currentUserData.id);
+  }, [allLeads, currentUserData.id]);
+
   // Initialize Firebase Auth (Canvas Requirement)
   useEffect(() => {
     const initAuth = async () => {
@@ -419,12 +426,8 @@ export default function WAsistApp() {
     );
   }
 
-  const currentUserData = adminViewingUser || appUser;
   const isViewMode = !!adminViewingUser;
   
-  // Filter leads based on current viewing user
-  const userLeads = useMemo(() => allLeads.filter(l => l.userId === currentUserData.id), [allLeads, currentUserData.id]);
-
   // Pipeline grouping
   const pipeline = {
     'New': userLeads.filter(l => l.status === 'New'),
