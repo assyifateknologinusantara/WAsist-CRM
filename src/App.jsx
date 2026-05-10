@@ -1492,11 +1492,21 @@ const LeadFormModal = ({ appId, userId }) => {
        const apiKey = ""; // Disuntikkan pada saat runtime di Canvas environment
        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
+       const promptText = `Anda adalah asisten AI ekstraktor data CRM yang handal. 
+Analisis screenshot obrolan WhatsApp ini. Tugas Anda adalah mengekstrak informasi calon pelanggan dengan detail berikut:
+1. 'name': Cari nama pengirim pesan. Lihat area paling atas/header chat WhatsApp. Jika tidak ada nama dan hanya menampilkan nomor, biarkan string kosong.
+2. 'phone': Cari nomor telepon pengirim. Lihat bagian paling atas/header layar chat WhatsApp atau dari teks pesan. Hapus spasi/tanda hubung, gunakan format angka saja (cth: 0812345 atau 62812345).
+3. 'nicheInfo': Ringkas inti dari apa yang ditanyakan, dipesan, atau diminati oleh pengirim berdasarkan chat bubble.
+4. 'value': Estimasi budget, harga, tagihan, atau nilai penawaran jika disebutkan (dalam angka saja). Jika tidak disebutkan sama sekali, isikan angka 0.
+
+Wajib kembalikan hasilnya HANYA dalam format JSON valid. Jangan gunakan blok kode markdown, backticks, atau teks tambahan apapun.
+Contoh format wajib: {"name": "", "phone": "", "nicheInfo": "", "value": 0}`;
+
        const payload = {
          contents: [{
            role: "user",
            parts: [
-             { text: "Analisis screenshot chat WhatsApp ini. Ekstrak informasi calon pelanggan (prospek). Kembalikan HANYA format JSON valid tanpa tanda backticks markdown. Key yang harus ada: 'name' (string, nama pengirim jika diketahui), 'phone' (string, nomor telepon atau WA pengirim), 'nicheInfo' (string, ringkasan singkat apa yang mereka tanyakan/minati), 'value' (number, estimasi harga/budget jika disebut dalam chat, jika tidak ada isikan 0). Jika data tertentu tidak ditemukan, berikan string kosong atau 0." },
+             { text: promptText },
              { inlineData: { mimeType: file.type, data: base64Data } }
            ]
          }],
@@ -1513,7 +1523,10 @@ const LeadFormModal = ({ appId, userId }) => {
        const textRes = data.candidates?.[0]?.content?.parts?.[0]?.text;
        
        if(textRes) {
-          const parsed = JSON.parse(textRes);
+          // Bersihkan textRes jika masih mengandung markdown backticks dari AI (Safety)
+          const cleanJsonString = textRes.replace(/```json/gi, '').replace(/```/g, '').trim();
+          const parsed = JSON.parse(cleanJsonString);
+          
           const form = document.getElementById('lead-form');
           if(form) {
              if(parsed.name) form.leadName.value = parsed.name;
