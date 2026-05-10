@@ -98,10 +98,42 @@ export default function WAsistApp() {
   const [customEnd, setCustomEnd] = useState('');
 
   const currentUserData = adminViewingUser || appUser || {};
+  
+  // SEMUA HOOKS (useMemo, useEffect) HARUS DI LEVEL TERATAS COMPONENT (TIDAK BOLEH DI DALAM IF)
   const userLeads = useMemo(() => {
     if (!currentUserData.id) return [];
     return allLeads.filter(l => l.userId === currentUserData.id);
   }, [allLeads, currentUserData.id]);
+
+  // Hook untuk Kalkulasi Grafik Admin (Diangkat ke level teratas untuk menghindari Crash Rules of Hooks)
+  const approvedUsers = useMemo(() => allUsers.filter(u => u.status === 'approved'), [allUsers]);
+  
+  const filteredChartUsers = useMemo(() => {
+    let filtered = approvedUsers;
+    const now = Date.now();
+    if (chartFilter === '7d') filtered = approvedUsers.filter(u => now - (u.createdAt || now) <= 7 * 24 * 60 * 60 * 1000);
+    else if (chartFilter === '30d') filtered = approvedUsers.filter(u => now - (u.createdAt || now) <= 30 * 24 * 60 * 60 * 1000);
+    else if (chartFilter === 'custom' && customStart && customEnd) {
+       const start = new Date(customStart).getTime();
+       const end = new Date(customEnd).getTime() + 86400000; 
+       filtered = approvedUsers.filter(u => (u.createdAt || now) >= start && (u.createdAt || now) <= end);
+    }
+    return filtered;
+  }, [approvedUsers, chartFilter, customStart, customEnd]);
+
+  const chartData = useMemo(() => {
+    const rawGroups = {};
+    filteredChartUsers.forEach(u => {
+       const dObj = new Date(u.createdAt || Date.now());
+       dObj.setHours(0,0,0,0);
+       const ts = dObj.getTime();
+       rawGroups[ts] = (rawGroups[ts] || 0) + (u.paymentAmount || 249000);
+    });
+    return Object.keys(rawGroups).sort().map(ts => ({
+       label: new Date(Number(ts)).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+       value: rawGroups[ts]
+    }));
+  }, [filteredChartUsers]);
 
   useEffect(() => {
     const initAuth = async () => {
@@ -276,6 +308,8 @@ export default function WAsistApp() {
     setIsLogoutModalOpen(false);
   };
 
+  // --- EARLY RETURNS DIMULAI DI SINI ---
+  // Pastikan tidak ada hooks (useState/useMemo/useEffect) di bawah garis ini.
   if (loading) return <div className="flex items-center justify-center h-screen bg-slate-50 text-blue-600"><Activity className="w-10 h-10 animate-spin" /></div>;
 
   if (!appUser || appUser.pendingPayment) {
@@ -436,41 +470,12 @@ export default function WAsistApp() {
 
   // === TAMPILAN DASHBOARD ADMIN PENUH ===
   if (appUser.role === 'admin' && !adminViewingUser) {
-    const approvedUsers = allUsers.filter(u => u.status === 'approved');
     const totalOmset = approvedUsers.reduce((sum, u) => sum + (u.paymentAmount || 249000), 0);
     const pendingUsers = allUsers.filter(u => u.status === 'pending');
 
     const approveUser = async (id) => {
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'wasist_users', id), { status: 'approved' });
     };
-
-    // Fitur Grafik: Memproses Data Pendapatan (Chart Logic)
-    const filteredChartUsers = useMemo(() => {
-      let filtered = approvedUsers;
-      const now = Date.now();
-      if (chartFilter === '7d') filtered = approvedUsers.filter(u => now - (u.createdAt || now) <= 7 * 24 * 60 * 60 * 1000);
-      else if (chartFilter === '30d') filtered = approvedUsers.filter(u => now - (u.createdAt || now) <= 30 * 24 * 60 * 60 * 1000);
-      else if (chartFilter === 'custom' && customStart && customEnd) {
-         const start = new Date(customStart).getTime();
-         const end = new Date(customEnd).getTime() + 86400000; 
-         filtered = approvedUsers.filter(u => (u.createdAt || now) >= start && (u.createdAt || now) <= end);
-      }
-      return filtered;
-    }, [approvedUsers, chartFilter, customStart, customEnd]);
-
-    const chartData = useMemo(() => {
-      const rawGroups = {};
-      filteredChartUsers.forEach(u => {
-         const dObj = new Date(u.createdAt || Date.now());
-         dObj.setHours(0,0,0,0);
-         const ts = dObj.getTime();
-         rawGroups[ts] = (rawGroups[ts] || 0) + (u.paymentAmount || 249000);
-      });
-      return Object.keys(rawGroups).sort().map(ts => ({
-         label: new Date(Number(ts)).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
-         value: rawGroups[ts]
-      }));
-    }, [filteredChartUsers]);
 
     return (
       <div className="flex h-screen bg-slate-50">
