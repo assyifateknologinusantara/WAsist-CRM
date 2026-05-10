@@ -1496,7 +1496,7 @@ const LeadFormModal = ({ appId, userId }) => {
          contents: [{
            role: "user",
            parts: [
-             { text: "Tugas Anda adalah membaca screenshot chat WhatsApp ini. Fokus utama:\n1. Cari NOMOR TELEPON/WA pengirim (biasanya di paling atas obrolan atau disebutkan dalam chat). Bersihkan menjadi format angka.\n2. Cari NAMA pengirim jika ada. Jika tidak ada, biarkan kosong.\n3. Pahami ISI CHAT: Apa yang mereka butuhkan/tanyakan? Tuliskan minat mereka dengan jelas.\n4. Cari NOMINAL HARGA jika mereka menyebutkannya." },
+             { text: "Berperanlah sebagai asisten manusia yang melihat layar HP. Ini adalah screenshot obrolan WhatsApp.\n\nINSTRUKSI:\n1. Lihat bagian PALING ATAS (Header): Biasanya tertulis Nama Kontak ATAU Nomor HP (+62 / 08). Jika itu kumpulan angka, berarti itu NOMOR HP. Jika itu huruf, berarti itu NAMA.\n2. Lihat bagian TENGAH (Isi Pesan): Baca teks yang dikirimkan oleh orang tersebut (biasanya gelembung pesan sebelah kiri/putih). Pahami apa maksud, pertanyaan, atau pesanan mereka.\n\nEKSTRAK DATA BERIKUT:\n- phone: Nomor HP pengirim. Bersihkan semua spasi/tanda hubung/+. Hanya sisakan angka (misal: 0812345). Jika tidak ketemu, kosongkan.\n- name: Nama pengirim. Jika tidak ketemu, kosongkan.\n- nicheInfo: Ringkasan singkat 1-2 kalimat tentang apa yang mereka butuhkan atau tanyakan dari isi chat.\n- value: Estimasi uang/harga jika disebutkan. Jika tidak ada, isikan angka 0." },
              { inlineData: { mimeType: file.type, data: base64Data } }
            ]
          }],
@@ -1505,10 +1505,10 @@ const LeadFormModal = ({ appId, userId }) => {
            responseSchema: {
              type: "OBJECT",
              properties: {
-               phone: { type: "STRING", description: "Nomor telepon pengirim. Bersihkan karakter non-angka." },
-               name: { type: "STRING", description: "Nama pengirim. Kosongkan jika tidak ada." },
-               nicheInfo: { type: "STRING", description: "Ringkasan minat atau kebutuhan pengirim dari isi obrolan." },
-               value: { type: "INTEGER", description: "Nominal uang jika ada, atau 0." }
+               phone: { type: "STRING", description: "Nomor HP (+62/08). Cek header atas atau isi pesan. Harus berupa angka tanpa spasi." },
+               name: { type: "STRING", description: "Nama orang. Cek header atas (jika bukan nomor) atau dari perkenalan di isi pesan." },
+               nicheInfo: { type: "STRING", description: "Apa yang dia tanyakan/butuhkan dari chatnya." },
+               value: { type: "INTEGER", description: "Harga/budget jika disebut. Jika tidak, 0." }
              },
              required: ["phone", "name", "nicheInfo", "value"]
            }
