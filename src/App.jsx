@@ -1492,25 +1492,27 @@ const LeadFormModal = ({ appId, userId }) => {
        const apiKey = ""; // Disuntikkan pada saat runtime di Canvas environment
        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
-       const promptText = `Anda adalah asisten AI ekstraktor data CRM yang handal. 
-Analisis screenshot obrolan WhatsApp ini. Tugas Anda adalah mengekstrak informasi calon pelanggan dengan detail berikut:
-1. 'name': Cari nama pengirim pesan. Lihat area paling atas/header chat WhatsApp. Jika tidak ada nama dan hanya menampilkan nomor, biarkan string kosong.
-2. 'phone': Cari nomor telepon pengirim. Lihat bagian paling atas/header layar chat WhatsApp atau dari teks pesan. Hapus spasi/tanda hubung, gunakan format angka saja (cth: 0812345 atau 62812345).
-3. 'nicheInfo': Ringkas inti dari apa yang ditanyakan, dipesan, atau diminati oleh pengirim berdasarkan chat bubble.
-4. 'value': Estimasi budget, harga, tagihan, atau nilai penawaran jika disebutkan (dalam angka saja). Jika tidak disebutkan sama sekali, isikan angka 0.
-
-Wajib kembalikan hasilnya HANYA dalam format JSON valid. Jangan gunakan blok kode markdown, backticks, atau teks tambahan apapun.
-Contoh format wajib: {"name": "", "phone": "", "nicheInfo": "", "value": 0}`;
-
        const payload = {
          contents: [{
            role: "user",
            parts: [
-             { text: promptText },
+             { text: "Tolong ekstrak informasi prospek dari screenshot WhatsApp ini. Perhatikan secara detail header (nama kontak/nomor di bagian atas) dan isi pesannya (mungkin prospek menyebutkan nama dan pertanyaannya)." },
              { inlineData: { mimeType: file.type, data: base64Data } }
            ]
          }],
-         generationConfig: { responseMimeType: "application/json" }
+         generationConfig: {
+           responseMimeType: "application/json",
+           responseSchema: {
+             type: "OBJECT",
+             properties: {
+               name: { type: "STRING", description: "Nama prospek. Cari di bagian paling atas layar obrolan, atau jika prospek memperkenalkan namanya di dalam pesan. Jika tidak ditemukan nama, kosongkan." },
+               phone: { type: "STRING", description: "Nomor WhatsApp/telepon prospek. Cari di bagian atas layar obrolan atau di teks pesan. Bersihkan dari spasi/strip, hanya angka (misal: 0812... atau 6281...)." },
+               nicheInfo: { type: "STRING", description: "Ringkasan inti (1-2 kalimat) tentang layanan atau produk yang diminati/dipesan oleh prospek." },
+               value: { type: "INTEGER", description: "Jika ada penyebutan harga, budget, tagihan, atau nilai (dalam angka bulat rupiah), tulis angkanya saja. Jika tidak ada, tulis 0." }
+             },
+             required: ["name", "phone", "nicheInfo", "value"]
+           }
+         }
        };
 
        // Menggunakan fungsi fetch dengan auto-retry
@@ -1523,16 +1525,13 @@ Contoh format wajib: {"name": "", "phone": "", "nicheInfo": "", "value": 0}`;
        const textRes = data.candidates?.[0]?.content?.parts?.[0]?.text;
        
        if(textRes) {
-          // Bersihkan textRes jika masih mengandung markdown backticks dari AI (Safety)
-          const cleanJsonString = textRes.replace(/```json/gi, '').replace(/```/g, '').trim();
-          const parsed = JSON.parse(cleanJsonString);
-          
+          const parsed = JSON.parse(textRes);
           const form = document.getElementById('lead-form');
           if(form) {
              if(parsed.name) form.leadName.value = parsed.name;
              if(parsed.phone) form.phone.value = parsed.phone;
              if(parsed.nicheInfo) form.nicheInfo.value = parsed.nicheInfo;
-             if(parsed.value) form.value.value = parsed.value;
+             if(parsed.value !== undefined) form.value.value = parsed.value;
              form.notes.value = "Data ini diisi otomatis dari hasil baca Screenshot WhatsApp oleh AI.";
           }
        }
