@@ -1496,7 +1496,7 @@ const LeadFormModal = ({ appId, userId }) => {
          contents: [{
            role: "user",
            parts: [
-             { text: "Anda adalah AI ekstraktor data CRM khusus WhatsApp. Pindai seluruh teks yang ada di gambar (Header atas dan isi obrolan). \n1. Cari NOMOR HP prospek (ada di bagian atas/header atau di dalam obrolan teks). Ubah format menjadi angka saja tanpa spasi/strip.\n2. Cari NAMA prospek. Jika TIDAK ADA nama yang tertera, Anda WAJIB menggunakan Nomor HP tersebut sebagai 'name'. JANGAN biarkan nama kosong.\n3. Rangkum inti percakapan di nicheInfo." },
+             { text: "Tugas Anda adalah membaca screenshot chat WhatsApp ini. Fokus utama:\n1. Cari NOMOR TELEPON/WA pengirim (biasanya di paling atas obrolan atau disebutkan dalam chat). Bersihkan menjadi format angka.\n2. Cari NAMA pengirim jika ada. Jika tidak ada, biarkan kosong.\n3. Pahami ISI CHAT: Apa yang mereka butuhkan/tanyakan? Tuliskan minat mereka dengan jelas.\n4. Cari NOMINAL HARGA jika mereka menyebutkannya." },
              { inlineData: { mimeType: file.type, data: base64Data } }
            ]
          }],
@@ -1505,12 +1505,12 @@ const LeadFormModal = ({ appId, userId }) => {
            responseSchema: {
              type: "OBJECT",
              properties: {
-               name: { type: "STRING", description: "Nama pengirim. Jika tidak ada nama yang disebutkan atau di header, ISI VALUE INI DENGAN NOMOR HP MEREKA. Parameter ini wajib ada isinya." },
-               phone: { type: "STRING", description: "Nomor telepon/WA klien. Diekstrak dari header aplikasi atau teks percakapan. Hasilkan dalam format deretan angka." },
-               nicheInfo: { type: "STRING", description: "Ringkasan maksud/tujuan chat dari klien." },
-               value: { type: "INTEGER", description: "Estimasi nominal uang (jika disebut). Jika tidak ada, isikan 0." }
+               phone: { type: "STRING", description: "Nomor telepon pengirim. Bersihkan karakter non-angka." },
+               name: { type: "STRING", description: "Nama pengirim. Kosongkan jika tidak ada." },
+               nicheInfo: { type: "STRING", description: "Ringkasan minat atau kebutuhan pengirim dari isi obrolan." },
+               value: { type: "INTEGER", description: "Nominal uang jika ada, atau 0." }
              },
-             required: ["name", "phone", "nicheInfo", "value"]
+             required: ["phone", "name", "nicheInfo", "value"]
            }
          }
        };
@@ -1528,16 +1528,22 @@ const LeadFormModal = ({ appId, userId }) => {
           const parsed = JSON.parse(textRes);
           const form = document.getElementById('lead-form');
           if(form) {
-             if(parsed.name) form.leadName.value = parsed.name;
-             if(parsed.phone) form.phone.value = parsed.phone;
-             if(parsed.nicheInfo) form.nicheInfo.value = parsed.nicheInfo;
-             if(parsed.value !== undefined) form.value.value = parsed.value;
-             form.notes.value = "Data ini diisi otomatis dari hasil baca Screenshot WhatsApp oleh AI.";
+             // Fallback cerdas di sisi frontend: Jika nama kosong atau tidak dikenali, gunakan nomor telepon
+             let finalName = parsed.name?.trim();
+             if (!finalName || finalName.toLowerCase() === 'tidak diketahui' || finalName === '-') {
+               finalName = parsed.phone?.trim() || 'Prospek Baru';
+             }
+
+             form.leadName.value = finalName;
+             form.phone.value = parsed.phone || '';
+             form.nicheInfo.value = parsed.nicheInfo || '';
+             form.value.value = parsed.value !== undefined ? parsed.value : 0;
+             form.notes.value = "Data ini diisi otomatis dari hasil analisis cerdas Screenshot WhatsApp oleh AI.";
           }
        }
     } catch (err) {
        console.error("AI Error:", err);
-       setAiError("Gagal memproses gambar. Pastikan ini adalah screenshot yang jelas.");
+       setAiError("Gagal memproses gambar. Pastikan gambar jelas dan merupakan obrolan WhatsApp.");
        setImagePreview(null);
     } finally {
        setAiProcessing(false);
