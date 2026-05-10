@@ -81,6 +81,7 @@ export default function WAsistApp() {
   const [authView, setAuthView] = useState('login'); 
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState(''); // State untuk pesan sukses (seperti Lupa Password)
   const [activeTab, setActiveTab] = useState('dashboard');
   
   const [adminViewingUser, setAdminViewingUser] = useState(null);
@@ -153,6 +154,7 @@ export default function WAsistApp() {
   const handleRegister = async (e) => {
     e.preventDefault();
     setErrorMsg('');
+    setSuccessMsg('');
     const form = e.target;
     const name = form.name.value;
     const email = form.email.value;
@@ -208,6 +210,7 @@ export default function WAsistApp() {
   const handleLogin = (e) => {
     e.preventDefault();
     setErrorMsg('');
+    setSuccessMsg('');
     const form = e.target;
     
     // Fitur Keamanan: Validasi Captcha
@@ -244,6 +247,21 @@ export default function WAsistApp() {
     }
   };
 
+  // Fitur Lupa Password Logic
+  const handleForgotPassword = (e) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSuccessMsg('');
+    const email = e.target.email.value;
+
+    const user = allUsers.find(u => u.email === email);
+    if (user) {
+      setSuccessMsg(`Email ditemukan! Tautan pengaturan ulang kata sandi telah disimulasikan. Untuk bantuan instan, silakan hubungi Admin via WhatsApp.`);
+    } else {
+      setErrorMsg('Email tidak terdaftar di sistem kami.');
+    }
+  };
+
   // Triggered by "Logout" buttons
   const promptLogout = () => {
     setIsLogoutModalOpen(true);
@@ -274,8 +292,14 @@ export default function WAsistApp() {
 
           <Card className="shadow-2xl shadow-slate-200/50 border-0 bg-white/80 backdrop-blur-xl animate-in zoom-in-95 duration-500">
             {errorMsg && (
-              <div className="mb-6 p-4 bg-rose-50 border border-rose-100 text-rose-600 text-sm rounded-xl flex items-center gap-3 animate-pulse">
-                <AlertCircle className="w-5 h-5 flex-shrink-0" /> <span className="font-medium">{errorMsg}</span>
+              <div className="mb-6 p-4 bg-rose-50 border border-rose-100 text-rose-600 text-sm rounded-xl flex items-center gap-3 animate-pulse shadow-sm">
+                <AlertCircle className="w-5 h-5 flex-shrink-0" /> <span className="font-medium leading-tight">{errorMsg}</span>
+              </div>
+            )}
+            
+            {successMsg && (
+              <div className="mb-6 p-4 bg-emerald-50 border border-emerald-100 text-emerald-700 text-sm rounded-xl flex items-center gap-3 animate-in fade-in zoom-in-95 shadow-sm">
+                <CheckCircle className="w-5 h-5 flex-shrink-0" /> <span className="font-medium leading-tight">{successMsg}</span>
               </div>
             )}
 
@@ -286,7 +310,10 @@ export default function WAsistApp() {
                   <input name="username" type="text" required className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none transition-all" placeholder="email@contoh.com" />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Password</label>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <label className="block text-sm font-semibold text-slate-700">Password</label>
+                    <button type="button" onClick={() => {setAuthView('forgotPassword'); setErrorMsg(''); setSuccessMsg('');}} className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors">Lupa Password?</button>
+                  </div>
                   <input name="password" type="password" required className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none transition-all" placeholder="••••••••" />
                 </div>
                 
@@ -302,8 +329,38 @@ export default function WAsistApp() {
                 <Button type="submit" className="w-full py-3.5 text-base mt-2">Masuk ke Dashboard</Button>
                 <div className="text-center mt-6">
                   <p className="text-sm text-slate-500">
-                    Belum punya akun? <button type="button" onClick={() => {setAuthView('register'); setErrorMsg('');}} className="text-blue-600 font-bold hover:text-blue-800 transition-colors">Daftar sekarang</button>
+                    Belum punya akun? <button type="button" onClick={() => {setAuthView('register'); setErrorMsg(''); setSuccessMsg('');}} className="text-blue-600 font-bold hover:text-blue-800 transition-colors">Daftar sekarang</button>
                   </p>
+                </div>
+              </form>
+            )}
+
+            {authView === 'forgotPassword' && (
+              <form onSubmit={handleForgotPassword} className="space-y-4 animate-in fade-in zoom-in-95 duration-300">
+                <div className="text-center mb-6">
+                   <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-100 shadow-inner">
+                     <HelpCircle className="w-8 h-8 text-blue-600" />
+                   </div>
+                   <h2 className="text-2xl font-black text-slate-800 tracking-tight">Lupa Password?</h2>
+                   <p className="text-sm text-slate-500 mt-1.5 px-4">Masukkan email terdaftar Anda untuk menerima instruksi pemulihan kata sandi.</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Email Terdaftar</label>
+                  <input name="email" type="email" required className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none transition-all" placeholder="email@contoh.com" />
+                </div>
+                
+                <Button type="submit" className="w-full py-3.5 text-base mt-2">Cek Email Sistem</Button>
+                
+                {successMsg && (
+                  <div className="pt-2">
+                    <a href="https://wa.me/6285117392045?text=Halo%20Admin,%20saya%20lupa%20password%20akun%20WAsist%20saya.%20Mohon%20bantu%20reset%20kata%20sandi." target="_blank" rel="noreferrer">
+                      <Button variant="success" className="w-full py-3 text-sm font-bold shadow-emerald-300" icon={MessageCircle}>Hubungi Admin via WA</Button>
+                    </a>
+                  </div>
+                )}
+
+                <div className="text-center mt-6">
+                  <button type="button" onClick={() => {setAuthView('login'); setErrorMsg(''); setSuccessMsg('');}} className="text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors">Kembali ke halaman Login</button>
                 </div>
               </form>
             )}
@@ -329,7 +386,7 @@ export default function WAsistApp() {
                 <Button type="submit" className="w-full py-3.5 text-base mt-4">Buat Akun WAsist</Button>
                 <div className="text-center mt-6">
                   <p className="text-sm text-slate-500">
-                    Sudah punya akun? <button type="button" onClick={() => {setAuthView('login'); setErrorMsg('');}} className="text-blue-600 font-bold hover:text-blue-800 transition-colors">Masuk</button>
+                    Sudah punya akun? <button type="button" onClick={() => {setAuthView('login'); setErrorMsg(''); setSuccessMsg('');}} className="text-blue-600 font-bold hover:text-blue-800 transition-colors">Masuk</button>
                   </p>
                 </div>
               </form>
