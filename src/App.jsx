@@ -353,90 +353,123 @@ export default function WAsistApp() {
           <button onClick={handleLogout} className="flex items-center gap-3 p-3 text-slate-400 hover:text-white mt-auto hover:bg-slate-800 rounded-xl transition-all"><LogOut className="w-5 h-5"/> Logout</button>
         </div>
 
-        <div className="flex-1 overflow-auto p-4 md:p-8">
-          <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-8">
-            <div>
-              <h2 className="text-2xl font-black text-slate-800">Dashboard Statistik</h2>
-              <p className="text-slate-500 text-sm mt-1">Pantau pendaftar dan omset WAsist Anda.</p>
+        <div className="flex-1 overflow-auto relative pb-24 md:pb-0">
+          
+          {/* Mobile Header Top untuk Admin */}
+          <div className="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center sticky top-0 z-30 shadow-md">
+            <div className="flex items-center gap-3">
+              <div className="bg-blue-500/20 p-1.5 rounded-lg border border-blue-400/30">
+                <Settings className="w-5 h-5 text-blue-400" />
+              </div>
+              <span className="font-black text-lg tracking-tight">Admin Panel</span>
             </div>
-            <Button onClick={() => window.print()} variant="outline" icon={Printer}>Cetak Laporan</Button>
+            <button onClick={handleLogout} className="text-slate-400 hover:text-rose-400 bg-slate-800 p-2 rounded-xl border border-slate-700 transition-colors">
+              <LogOut className="w-5 h-5"/>
+            </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <Card className="bg-gradient-to-br from-blue-600 to-blue-800 text-white border-none shadow-xl shadow-blue-200">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="text-blue-100 mb-1 font-medium text-sm">Total Omset Penjualan</p>
-                  <h3 className="text-3xl font-black tracking-tight">Rp {totalOmset.toLocaleString('id-ID')}</h3>
-                </div>
-                <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm"><TrendingUp className="w-6 h-6" /></div>
+          <div className="p-4 md:p-8">
+            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-8">
+              <div>
+                <h2 className="text-2xl font-black text-slate-800">Dashboard Statistik</h2>
+                <p className="text-slate-500 text-sm mt-1">Pantau pendaftar dan omset WAsist Anda.</p>
               </div>
-            </Card>
-            <Card>
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="text-slate-500 mb-1 font-medium text-sm">Total Pengguna Aktif</p>
-                  <h3 className="text-3xl font-black text-slate-800">{allUsers.filter(u => u.status === 'approved').length}</h3>
-                </div>
-                <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl"><CheckCircle className="w-6 h-6" /></div>
-              </div>
-            </Card>
-            <Card>
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="text-slate-500 mb-1 font-medium text-sm">Menunggu Approval</p>
-                  <h3 className="text-3xl font-black text-slate-800">{pendingUsers}</h3>
-                </div>
-                <div className="p-3 bg-amber-100 text-amber-600 rounded-xl"><AlertCircle className="w-6 h-6" /></div>
-              </div>
-            </Card>
-          </div>
-
-          <Card className="p-0 overflow-hidden border-0">
-            <div className="p-6 border-b border-slate-100 bg-white">
-               <h3 className="text-lg font-bold text-slate-800">Daftar Pendaftar WAsist</h3>
+              <Button onClick={() => window.print()} variant="outline" icon={Printer}>Cetak Laporan</Button>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-100">
-                  <tr>
-                    <th className="px-6 py-4">Nama / Email</th>
-                    <th className="px-6 py-4">Bisnis (Niche)</th>
-                    <th className="px-6 py-4">Tagihan</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4 text-right">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50 bg-white">
-                  {allUsers.map(user => (
-                    <tr key={user.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-slate-800 text-base">{user.name}</div>
-                        <div className="text-slate-500 text-xs mt-0.5">{user.email}</div>
-                      </td>
-                      <td className="px-6 py-4 font-medium text-slate-700">{user.niche}</td>
-                      <td className="px-6 py-4 font-mono font-medium text-slate-700 bg-slate-50/50">Rp {user.paymentAmount?.toLocaleString('id-ID')}</td>
-                      <td className="px-6 py-4">
-                        <span className={`px-3 py-1.5 text-xs rounded-lg font-bold uppercase tracking-wider ${user.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                          {user.status === 'approved' ? 'Aktif' : 'Pending'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 flex justify-end gap-2">
-                        {user.status === 'pending' && (
-                          <Button onClick={() => approveUser(user.id)} variant="success" className="px-3 py-1.5 text-xs">Approve</Button>
-                        )}
-                        <Button onClick={() => setAdminViewingUser(user)} variant="outline" className="px-3 py-1.5 text-xs bg-white" icon={Eye}>Lihat Dashboard</Button>
-                      </td>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <Card className="bg-gradient-to-br from-blue-600 to-blue-800 text-white border-none shadow-xl shadow-blue-200">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-blue-100 mb-1 font-medium text-sm">Total Omset Penjualan</p>
+                    <h3 className="text-3xl font-black tracking-tight">Rp {totalOmset.toLocaleString('id-ID')}</h3>
+                  </div>
+                  <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm"><TrendingUp className="w-6 h-6" /></div>
+                </div>
+              </Card>
+              <Card>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-slate-500 mb-1 font-medium text-sm">Total Pengguna Aktif</p>
+                    <h3 className="text-3xl font-black text-slate-800">{allUsers.filter(u => u.status === 'approved').length}</h3>
+                  </div>
+                  <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl"><CheckCircle className="w-6 h-6" /></div>
+                </div>
+              </Card>
+              <Card>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-slate-500 mb-1 font-medium text-sm">Menunggu Approval</p>
+                    <h3 className="text-3xl font-black text-slate-800">{pendingUsers}</h3>
+                  </div>
+                  <div className="p-3 bg-amber-100 text-amber-600 rounded-xl"><AlertCircle className="w-6 h-6" /></div>
+                </div>
+              </Card>
+            </div>
+
+            <Card className="p-0 overflow-hidden border-0">
+              <div className="p-6 border-b border-slate-100 bg-white">
+                 <h3 className="text-lg font-bold text-slate-800">Daftar Pendaftar WAsist</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-100">
+                    <tr>
+                      <th className="px-6 py-4">Nama / Email</th>
+                      <th className="px-6 py-4">Bisnis (Niche)</th>
+                      <th className="px-6 py-4">Tagihan</th>
+                      <th className="px-6 py-4">Status</th>
+                      <th className="px-6 py-4 text-right">Aksi</th>
                     </tr>
-                  ))}
-                  {allUsers.length === 0 && (
-                    <tr><td colSpan="5" className="text-center py-10 text-slate-500 font-medium">Belum ada pengguna terdaftar.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 bg-white">
+                    {allUsers.map(user => (
+                      <tr key={user.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="font-bold text-slate-800 text-base">{user.name}</div>
+                          <div className="text-slate-500 text-xs mt-0.5">{user.email}</div>
+                        </td>
+                        <td className="px-6 py-4 font-medium text-slate-700">{user.niche}</td>
+                        <td className="px-6 py-4 font-mono font-medium text-slate-700 bg-slate-50/50">Rp {user.paymentAmount?.toLocaleString('id-ID')}</td>
+                        <td className="px-6 py-4">
+                          <span className={`px-3 py-1.5 text-xs rounded-lg font-bold uppercase tracking-wider ${user.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {user.status === 'approved' ? 'Aktif' : 'Pending'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 flex justify-end gap-2">
+                          {user.status === 'pending' && (
+                            <Button onClick={() => approveUser(user.id)} variant="success" className="px-3 py-1.5 text-xs">Approve</Button>
+                          )}
+                          <Button onClick={() => setAdminViewingUser(user)} variant="outline" className="px-3 py-1.5 text-xs bg-white" icon={Eye}>Lihat Dashboard</Button>
+                        </td>
+                      </tr>
+                    ))}
+                    {allUsers.length === 0 && (
+                      <tr><td colSpan="5" className="text-center py-10 text-slate-500 font-medium">Belum ada pengguna terdaftar.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
         </div>
+
+        {/* MOBILE BOTTOM NAVIGATION ADMIN (Tampil Hanya di HP) */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 text-white border-t border-slate-800 z-50 flex justify-around items-center p-2 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.2)]">
+          <button className="relative flex flex-col items-center justify-center w-full py-2 text-blue-400">
+            <div className="p-1.5 rounded-xl bg-blue-500/20 scale-110">
+              <Users className="w-5 h-5" />
+            </div>
+            <span className="text-[10px] font-bold mt-1 tracking-wide">Pengguna</span>
+          </button>
+          <button onClick={handleLogout} className="relative flex flex-col items-center justify-center w-full py-2 text-slate-400 hover:text-rose-400 transition-colors">
+            <div className="p-1.5 rounded-xl">
+              <LogOut className="w-5 h-5" />
+            </div>
+            <span className="text-[10px] font-bold mt-1 tracking-wide opacity-70">Logout</span>
+          </button>
+        </nav>
+
       </div>
     );
   }
