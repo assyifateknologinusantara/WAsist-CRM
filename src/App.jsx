@@ -110,16 +110,12 @@ export default function WAsistApp() {
   });
   
   const [adminViewingUser, setAdminViewingUser] = useState(null);
-
   const [crossSellLead, setCrossSellLead] = useState(null);
-
   const [captcha, setCaptcha] = useState({ n1: 0, n2: 0 });
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
-
   const [chartFilter, setChartFilter] = useState('7d');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
-
   const [copyStatus, setCopyStatus] = useState('');
 
   const currentUserData = adminViewingUser || appUser || {};
@@ -1482,11 +1478,15 @@ const LeadFormModal = ({ appId, userId }) => {
   const [aiProcessing, setAiProcessing] = useState(false);
   const [aiError, setAiError] = useState('');
   const [imagePreview, setImagePreview] = useState(null);
+  
+  // Visual Feedback Data Ekstrak
+  const [extractedData, setExtractedData] = useState(null);
 
   // Proses Ekstrak Menggunakan AI Vision (Google Gemini API via Frontend)
   const extractImageWithGemini = async (file, base64Url) => {
     setAiProcessing(true);
     setAiError('');
+    setExtractedData(null);
     try {
        const base64Data = base64Url.split(',')[1];
        const apiKey = ""; // Disuntikkan pada saat runtime di Canvas environment
@@ -1496,7 +1496,7 @@ const LeadFormModal = ({ appId, userId }) => {
          contents: [{
            role: "user",
            parts: [
-             { text: "Anda adalah asisten cerdas yang sangat ahli membaca screenshot WhatsApp seperti manusia.\n\nTugas Anda:\n1. NAMA (name): Baca teks di bagian PALING ATAS layar (header profil kontak). Jika isinya berupa huruf (nama orang/toko), itu adalah namanya. Jika isinya angka (+62/08...), berarti namanya tidak disave, maka carilah nama di dalam isi chat (misal 'Halo saya Budi'). Jika tetap tidak ada, biarkan kosong.\n2. NOMOR WA (phone): Cari nomor telepon di bagian header atas ATAU di dalam isi pesan. Hapus spasi/strip/+, ambil urutan angkanya saja.\n3. KEBUTUHAN (nicheInfo): Baca isi percakapan (teks di dalam gelembung chat). Apa yang dibahas? Apa yang ditanyakan atau ingin dipesan klien? Tulis ringkasan singkatnya.\n4. NILAI (value): Jika klien menyebutkan nominal uang, tulis angka bulatnya. Jika tidak, tulis 0.\n\nKEMBALIKAN HANYA OBJEK JSON MURNI TANPA TEKS LAIN." },
+             { text: "Ekstrak informasi dari screenshot obrolan WhatsApp ini dengan sangat teliti.\n\nATURAN EKSTRAKSI (BACA SEPERTI MANUSIA):\n1. NAMA: Lihat bagian PALING ATAS aplikasi (Header). Jika berupa teks/nama orang/nama toko, itu adalah namanya. Jika yang tertera di paling atas adalah NOMOR HP, maka biarkan nama kosong, ATAU cari nama di dalam isi chat jika dia memperkenalkan diri.\n2. NOMOR HP: Lihat bagian PALING ATAS aplikasi. Jika berupa angka (+62 atau 08), itu nomor HP. Jika tidak ada di atas, cari nomor HP di dalam isi teks obrolan. Bersihkan nomornya (hanya angka saja).\n3. KEBUTUHAN (nicheInfo): Baca pesan di sebelah kiri (pesan dari lawan bicara). Apa yang mereka butuhkan atau tanyakan? Tulis rangkuman 1 kalimat pendek.\n4. NILAI (value): Jika di obrolan ada penyebutan harga/budget/tagihan, tulis angka murninya (contoh: 150000). Jika tidak ada harga yang disebutkan, WAJIB diisi angka 0." },
              { inlineData: { mimeType: file.type, data: base64Data } }
            ]
          }],
@@ -1505,17 +1505,16 @@ const LeadFormModal = ({ appId, userId }) => {
            responseSchema: {
              type: "OBJECT",
              properties: {
-               phone: { type: "STRING", description: "Nomor WA. Pastikan hanya berisi angka. Jika tidak ada, kosongkan." },
-               name: { type: "STRING", description: "Nama orang/kontak. Cek header atas atau isi pesan." },
-               nicheInfo: { type: "STRING", description: "Inti obrolan/minat prospek." },
-               value: { type: "INTEGER", description: "Estimasi nominal jika disebutkan, atau 0." }
+               phone: { type: "STRING", description: "Nomor HP (+62/08) pengirim chat. Ambil angka murni. Jika tidak ada, kosongkan." },
+               name: { type: "STRING", description: "Nama orang/kontak. Cek header profil paling atas." },
+               nicheInfo: { type: "STRING", description: "Apa yang ditanyakan/dibutuhkan klien dalam chat tersebut." },
+               value: { type: "INTEGER", description: "Angka nominal uang jika disebut. Jika tidak, 0." }
              },
              required: ["phone", "name", "nicheInfo", "value"]
            }
          }
        };
 
-       // Menggunakan fungsi fetch dengan auto-retry
        const data = await fetchWithRetry(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1525,39 +1524,49 @@ const LeadFormModal = ({ appId, userId }) => {
        let textRes = data.candidates?.[0]?.content?.parts?.[0]?.text;
        
        if(textRes) {
-          // PEMBERSIHAN EKSTREM: Hanya mengambil isi di dalam tanda kurung kurawal {...}
-          const jsonMatch = textRes.match(/\{[\s\S]*\}/);
-          
-          if (jsonMatch) {
-             const parsed = JSON.parse(jsonMatch[0]);
-             const form = document.getElementById('lead-form');
-             if(form) {
-                // Fallback cerdas di sisi frontend: Jika nama kosong atau tidak dikenali, gunakan nomor telepon
-                let finalName = parsed.name?.trim();
-                if (!finalName || finalName.toLowerCase() === 'tidak diketahui' || finalName === '-' || finalName.toLowerCase() === 'null') {
-                  finalName = parsed.phone?.trim() || 'Prospek Baru';
-                }
+          // PEMBERSIHAN EKSTREM: Menangkap objek JSON meskipun API membalas dengan markdown/teks awalan
+          textRes = textRes.replace(/```json/gi, '').replace(/```/g, '').trim();
+          let parsed;
+          try {
+              parsed = JSON.parse(textRes);
+          } catch (e) {
+              const jsonMatch = textRes.match(/\{[\s\S]*\}/);
+              if (jsonMatch) {
+                  parsed = JSON.parse(jsonMatch[0]);
+              } else {
+                  throw new Error("Format JSON tidak valid");
+              }
+          }
 
-                let finalPhone = parsed.phone?.trim();
-                if (!finalPhone || finalPhone.toLowerCase() === 'tidak diketahui' || finalPhone === '-') {
-                  finalPhone = '';
-                }
-
-                form.leadName.value = finalName;
-                form.phone.value = finalPhone;
-                form.nicheInfo.value = parsed.nicheInfo || '';
-                form.value.value = parsed.value !== undefined ? parsed.value : 0;
-                form.notes.value = "Data ini diisi otomatis dari hasil analisis cerdas Screenshot WhatsApp oleh AI.";
+          const form = document.getElementById('lead-form');
+          if(form) {
+             // Fallback Data: Jika Nama tidak ada, salin dari Nomor. Jika Nomor juga tidak ada, tulis Prospek Baru.
+             let finalPhone = parsed.phone?.replace(/[^0-9]/g, '') || '';
+             
+             let finalName = parsed.name?.trim();
+             if (!finalName || finalName.toLowerCase() === 'tidak diketahui' || finalName === '-' || finalName.toLowerCase() === 'null') {
+                 if (finalPhone) {
+                     finalName = finalPhone;
+                 } else {
+                     finalName = 'Prospek Baru';
+                 }
              }
-          } else {
-             throw new Error("Format JSON tidak ditemukan dalam respon AI");
+
+             form.leadName.value = finalName;
+             form.phone.value = finalPhone;
+             form.nicheInfo.value = parsed.nicheInfo || '';
+             form.value.value = parsed.value !== undefined ? parsed.value : 0;
+             form.notes.value = "Data ini diisi otomatis dari hasil ekstraksi cerdas gambar/screenshot WhatsApp.";
+             
+             // Simpan State untuk feedback UI sukses
+             setExtractedData({ name: finalName, phone: finalPhone, nicheInfo: parsed.nicheInfo });
           }
        } else {
-          throw new Error("Respon AI kosong");
+          throw new Error("Respon API kosong");
        }
     } catch (err) {
        console.error("AI Error:", err);
-       setAiError("Gagal mengekstrak data dari gambar. Pastikan gambar jelas dan formatnya didukung.");
+       setAiError("Gagal membaca screenshot. Pastikan itu adalah gambar obrolan WhatsApp yang jelas.");
        setImagePreview(null);
     } finally {
        setAiProcessing(false);
@@ -1643,6 +1652,7 @@ const LeadFormModal = ({ appId, userId }) => {
       setIsOpen(false);
       setSmartPaste('');
       setImagePreview(null);
+      setExtractedData(null);
     } catch (err) {
       console.error(err);
     } finally {
@@ -1653,11 +1663,15 @@ const LeadFormModal = ({ appId, userId }) => {
   return (
     <>
       <Button onClick={() => setIsOpen(true)} icon={UserPlus} className="font-bold w-full md:w-auto shadow-blue-300">Tambah Prospek</Button>
-      <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="Data Prospek Baru">
+      <Modal isOpen={isOpen} onClose={() => {setIsOpen(false); setImagePreview(null); setExtractedData(null); setAiError('');}} title="Data Prospek Baru">
         
         {/* FITUR AUTO PASTE (TEKS & GAMBAR VISION AI) */}
         <div 
-          className="mb-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border-2 border-dashed border-blue-300 relative hover:bg-blue-100/50 transition-colors group overflow-hidden"
+          className={`mb-6 rounded-2xl border-2 border-dashed relative group overflow-hidden transition-all duration-500 ${
+              extractedData ? 'bg-emerald-50/50 border-emerald-300' : 
+              aiError ? 'bg-rose-50 border-rose-300' : 
+              'bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-300 hover:bg-blue-100/50'
+          }`}
           onPaste={handlePaste}
         >
            <input type="file" id="upload-screenshot" className="hidden" accept="image/*" onChange={(e) => {
@@ -1665,29 +1679,43 @@ const LeadFormModal = ({ appId, userId }) => {
            }} />
 
            {aiProcessing ? (
-              <div className="flex flex-col items-center justify-center py-8">
-                 <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-3" />
-                 <p className="text-sm font-black text-blue-900">AI Sedang Membaca Screenshot...</p>
-                 <p className="text-xs text-blue-600 font-medium">Mengekstrak nama, nomor WA, dan kebutuhan prospek.</p>
+              <div className="flex flex-col items-center justify-center py-10 animate-in fade-in zoom-in-95">
+                 <div className="relative">
+                    <Loader2 className="w-12 h-12 text-blue-600 animate-spin mb-3" />
+                    <Wand2 className="w-5 h-5 text-blue-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+                 </div>
+                 <p className="text-sm font-black text-blue-900 mt-2">Memindai Layar WhatsApp...</p>
+                 <p className="text-xs text-blue-600 font-medium">Sistem sedang membaca Nomor, Nama, dan Kebutuhan.</p>
               </div>
            ) : imagePreview ? (
-              <div className="relative rounded-xl overflow-hidden shadow-sm m-2">
-                 <img src={imagePreview} alt="Screenshot WA" className="w-full max-h-48 object-contain bg-slate-900/5 rounded-xl" />
-                 <button type="button" onClick={(e) => { e.stopPropagation(); setImagePreview(null); }} className="absolute top-2 right-2 bg-rose-500 text-white p-1.5 rounded-full hover:bg-rose-600 shadow-md">
+              <div className="relative p-2 animate-in fade-in">
+                 <div className="relative rounded-xl overflow-hidden shadow-sm">
+                   <img src={imagePreview} alt="Screenshot WA" className="w-full h-40 object-cover bg-slate-900/5 blur-[2px] opacity-60" />
+                   <div className="absolute inset-0 bg-gradient-to-b from-slate-900/10 to-slate-900/60 flex flex-col justify-end p-4">
+                      {extractedData ? (
+                         <div className="bg-white/95 backdrop-blur shadow-lg p-3 rounded-xl transform translate-y-2 animate-in slide-in-from-bottom-5">
+                            <p className="text-xs font-bold text-emerald-600 mb-1 flex items-center gap-1.5"><CheckCircle className="w-4 h-4"/> Data Ditemukan!</p>
+                            <p className="font-black text-slate-800 truncate">{extractedData.name}</p>
+                            <p className="text-xs font-medium text-slate-500 truncate mb-1">{extractedData.phone}</p>
+                            <p className="text-xs text-slate-600 truncate bg-slate-100 px-2 py-1 rounded-md">{extractedData.nicheInfo}</p>
+                         </div>
+                      ) : (
+                         <p className="text-white font-bold text-center">Gambar diproses...</p>
+                      )}
+                   </div>
+                 </div>
+                 <button type="button" onClick={(e) => { e.stopPropagation(); setImagePreview(null); setExtractedData(null); }} className="absolute top-4 right-4 bg-rose-500 text-white p-1.5 rounded-full hover:bg-rose-600 shadow-md transition-transform hover:scale-110">
                     <XCircle className="w-5 h-5" />
                  </button>
-                 <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-emerald-600 to-emerald-500 text-white text-xs font-bold py-2 text-center">
-                    <CheckCircle className="w-4 h-4 inline-block mr-1" /> Berhasil Diekstrak! Periksa form di bawah.
-                 </div>
               </div>
            ) : (
-              <div className="p-5 flex flex-col items-center justify-center text-center cursor-pointer" onClick={() => document.getElementById('upload-screenshot').click()}>
+              <div className="p-5 flex flex-col items-center justify-center text-center cursor-pointer min-h-[140px]" onClick={() => document.getElementById('upload-screenshot').click()}>
                  <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center mb-3 shadow-sm group-hover:scale-110 transition-transform duration-300">
                     <ImagePlus className="w-7 h-7 text-blue-600" />
                  </div>
                  <p className="text-sm font-black text-blue-900 mb-1">Upload / Paste Screenshot WA</p>
-                 <p className="text-xs text-blue-600 font-medium px-4">Tekan <kbd className="bg-white px-1.5 py-0.5 rounded shadow-sm text-slate-700">Ctrl+V</kbd> untuk paste gambar / teks percakapan klien di sini. AI akan otomatis mengisi form.</p>
-                 {aiError && <p className="text-xs text-rose-500 font-bold mt-3 p-2 bg-rose-100 rounded-lg">{aiError}</p>}
+                 <p className="text-xs text-blue-600 font-medium px-4">Tekan <kbd className="bg-white px-1.5 py-0.5 rounded shadow-sm text-slate-700">Ctrl+V</kbd> untuk menyalin gambar percakapan klien di sini. AI akan otomatis mengisi seluruh form.</p>
+                 {aiError && <p className="text-xs text-rose-600 font-bold mt-3 px-3 py-2 bg-rose-100 rounded-lg border border-rose-200 shadow-sm animate-pulse">{aiError}</p>}
               </div>
            )}
 
@@ -1698,7 +1726,7 @@ const LeadFormModal = ({ appId, userId }) => {
                     value={smartPaste} 
                     onChange={e => setSmartPaste(e.target.value)}
                     rows="2" 
-                    placeholder="Atau Paste teks biasa di sini..." 
+                    placeholder="Atau Paste teks biasa di sini (jika tidak punya gambar)..." 
                     className="w-full px-3 py-2 text-sm bg-white border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none mb-3 resize-none font-medium text-slate-700 relative z-10"
                     onClick={(e) => e.stopPropagation()}
                  ></textarea>
@@ -1719,7 +1747,7 @@ const LeadFormModal = ({ appId, userId }) => {
 
         <form id="lead-form" onSubmit={handleSubmit} className="space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="sm:col-span-2">
+            <div className="sm:col-span-2 relative">
               <label className="block text-sm font-bold text-slate-700 mb-1.5">Nama Prospek</label>
               <input name="leadName" required className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all font-medium" placeholder="Cth: Bpk Budi / PT Indah..." />
             </div>
@@ -1755,7 +1783,7 @@ const LeadFormModal = ({ appId, userId }) => {
             </div>
           </div>
           <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
-            <Button variant="ghost" onClick={() => setIsOpen(false)} className="font-bold">Batal</Button>
+            <Button variant="ghost" onClick={() => {setIsOpen(false); setImagePreview(null); setExtractedData(null); setAiError('');}} className="font-bold">Batal</Button>
             <Button type="submit" disabled={loading} className="font-bold">{loading ? 'Menyimpan...' : 'Simpan Prospek'}</Button>
           </div>
         </form>
