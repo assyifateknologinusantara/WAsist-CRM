@@ -1506,10 +1506,12 @@ const LeadFormModal = ({ appId, userId }) => {
     setExtractedData(null);
     try {
        const base64Data = base64Url.split(',')[1];
-       const defaultEnvKey = ""; 
-       const apiKey = customKey.trim() || defaultEnvKey; 
        
-       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+       // Perbaikan penamaan agar dapat dikenali oleh Environment Injector
+       const apiKey = ""; 
+       const activeKey = customKey.trim() || apiKey; 
+       
+       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${activeKey}`;
 
        const payload = {
          contents: [{
@@ -1610,9 +1612,10 @@ OUTPUT WAJIB HANYA JSON MURNI TANPA MARKDOWN \`\`\`json:
     } catch (err) {
        console.error("AI Error:", err);
        let errMsg = err.message;
-       // Deteksi error API key
-       if (errMsg.toLowerCase().includes('api key not valid')) {
-           errMsg = "API Key kosong/tidak valid. Silakan atur Key pribadi melalui ikon roda gigi di pojok kanan atas form ini.";
+       
+       // Deteksi error API key yang spesifik
+       if (errMsg.toLowerCase().includes('api key not valid') || errMsg.toLowerCase().includes('unregistered caller')) {
+           errMsg = "API Key kosong atau tidak terdeteksi. Silakan atur API Key pribadi Anda melalui ikon roda gigi di pojok kanan atas form ini.";
        }
        setAiError(`Gagal membaca: ${errMsg}`);
        setImagePreview(null);
@@ -1752,7 +1755,7 @@ OUTPUT WAJIB HANYA JSON MURNI TANPA MARKDOWN \`\`\`json:
                  <h4 className="font-bold text-slate-800 mb-2 flex items-center gap-2"><Settings className="w-4 h-4 text-blue-600"/> Pengaturan Gemini AI Key</h4>
                  <p className="text-xs text-slate-500 mb-3 font-medium">Jika AI bawaan sistem selalu gagal/error, masukkan <span className="text-blue-600 font-bold">API Key Anda sendiri</span> yang dimulai dengan `AIzaSy...` di bawah ini.</p>
                  <input
-                    type="text"
+                     type="text"
                     value={customKey}
                     onChange={e => setCustomKey(e.target.value)}
                     placeholder="Contoh: AIzaSyB9bbdvKgz97ekMthrA0f2jP5xY..."
