@@ -1496,7 +1496,7 @@ const LeadFormModal = ({ appId, userId }) => {
          contents: [{
            role: "user",
            parts: [
-             { text: "Ekstrak informasi dari screenshot obrolan WhatsApp ini dengan sangat teliti.\n\nATURAN EKSTRAKSI (BACA SEPERTI MANUSIA):\n1. NAMA: Lihat bagian PALING ATAS aplikasi (Header). Jika berupa teks/nama orang/nama toko, itu adalah namanya. Jika yang tertera di paling atas adalah NOMOR HP, maka biarkan nama kosong, ATAU cari nama di dalam isi chat jika dia memperkenalkan diri.\n2. NOMOR HP: Lihat bagian PALING ATAS aplikasi. Jika berupa angka (+62 atau 08), itu nomor HP. Jika tidak ada di atas, cari nomor HP di dalam isi teks obrolan. Bersihkan nomornya (hanya angka saja).\n3. KEBUTUHAN (nicheInfo): Baca pesan di sebelah kiri (pesan dari lawan bicara). Apa yang mereka butuhkan atau tanyakan? Tulis rangkuman 1 kalimat pendek.\n4. NILAI (value): Jika di obrolan ada penyebutan harga/budget/tagihan, tulis angka murninya (contoh: 150000). Jika tidak ada harga yang disebutkan, WAJIB diisi angka 0." },
+             { text: "Ekstrak informasi dari screenshot obrolan WhatsApp ini.\n\nATURAN:\n1. 'name': Nama kontak di header atas. Jika tidak ada/berupa nomor, tulis 'Prospek Baru'.\n2. 'phone': Nomor HP klien (bersihkan hanya angka). Jika tidak ada, kosongkan.\n3. 'nicheInfo': Kebutuhan/pertanyaan klien (1 kalimat pendek).\n4. 'value': Nominal harga/budget jika disebut. Jika tidak, isi '0'." },
              { inlineData: { mimeType: file.type, data: base64Data } }
            ]
          }],
@@ -1505,10 +1505,10 @@ const LeadFormModal = ({ appId, userId }) => {
            responseSchema: {
              type: "OBJECT",
              properties: {
-               phone: { type: "STRING", description: "Nomor HP (+62/08) pengirim chat. Ambil angka murni. Jika tidak ada, kosongkan." },
-               name: { type: "STRING", description: "Nama orang/kontak. Cek header profil paling atas." },
-               nicheInfo: { type: "STRING", description: "Apa yang ditanyakan/dibutuhkan klien dalam chat tersebut." },
-               value: { type: "INTEGER", description: "Angka nominal uang jika disebut. Jika tidak, 0." }
+               phone: { type: "STRING" },
+               name: { type: "STRING" },
+               nicheInfo: { type: "STRING" },
+               value: { type: "STRING" }
              },
              required: ["phone", "name", "nicheInfo", "value"]
            }
@@ -1520,6 +1520,10 @@ const LeadFormModal = ({ appId, userId }) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
        });
+
+       if (data.error) {
+           throw new Error(data.error.message || "API Error");
+       }
 
        let textRes = data.candidates?.[0]?.content?.parts?.[0]?.text;
        
@@ -1534,39 +1538,35 @@ const LeadFormModal = ({ appId, userId }) => {
               if (jsonMatch) {
                   parsed = JSON.parse(jsonMatch[0]);
               } else {
-                  throw new Error("Format JSON tidak valid");
+                  throw new Error("Format balasan AI bukan JSON yang valid.");
               }
           }
 
           const form = document.getElementById('lead-form');
           if(form) {
-             // Fallback Data: Jika Nama tidak ada, salin dari Nomor. Jika Nomor juga tidak ada, tulis Prospek Baru.
              let finalPhone = parsed.phone?.replace(/[^0-9]/g, '') || '';
-             
              let finalName = parsed.name?.trim();
+             
              if (!finalName || finalName.toLowerCase() === 'tidak diketahui' || finalName === '-' || finalName.toLowerCase() === 'null') {
-                 if (finalPhone) {
-                     finalName = finalPhone;
-                 } else {
-                     finalName = 'Prospek Baru';
-                 }
+                 finalName = finalPhone ? finalPhone : 'Prospek Baru';
              }
 
              form.leadName.value = finalName;
              form.phone.value = finalPhone;
              form.nicheInfo.value = parsed.nicheInfo || '';
-             form.value.value = parsed.value !== undefined ? parsed.value : 0;
+             form.value.value = parsed.value ? parsed.value.replace(/[^0-9]/g, '') : 0;
+             if (!form.value.value) form.value.value = 0;
+             
              form.notes.value = "Data ini diisi otomatis dari hasil ekstraksi cerdas gambar/screenshot WhatsApp.";
              
-             // Simpan State untuk feedback UI sukses
              setExtractedData({ name: finalName, phone: finalPhone, nicheInfo: parsed.nicheInfo });
           }
        } else {
-          throw new Error("Respon API kosong");
+          throw new Error("Respon AI kosong atau format tidak dikenali.");
        }
     } catch (err) {
        console.error("AI Error:", err);
-       setAiError("Gagal membaca screenshot. Pastikan itu adalah gambar obrolan WhatsApp yang jelas.");
+       setAiError(`Gagal membaca: ${err.message}. Pastikan file jelas & ukurannya wajar.`);
        setImagePreview(null);
     } finally {
        setAiProcessing(false);
