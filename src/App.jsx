@@ -1515,12 +1515,22 @@ const LeadFormModal = ({ appId, userId }) => {
          contents: [{
            role: "user",
            parts: [
-             { text: "Kamu adalah AI Agent ahli Data Entry CRM. Tugas utamamu adalah membaca screenshot WhatsApp ini dengan akurasi 100% dan mengekstraknya ke format JSON murni.\n\nANALISIS GAMBAR DENGAN TELITI:\n1. 'name': Fokus ke HEADER ATAS obrolan (sebelah foto profil). Salin teks persis di sana (nama kontak atau nomor jika belum disave).\n2. 'phone': Cari nomor telepon pengirim (+62/08...). Jika tidak ada di profil, cari di dalam isi chat. Jika tidak ada sama sekali, isi string kosong \"\".\n3. 'nicheInfo': Baca pesan klien secara mendalam. Apa yang mereka cari/tanyakan? Ringkas dalam 1 kalimat padat.\n4. 'value': Adakah nominal angka/harga/budget yang dibahas? Jika tidak ada, WAJIB isikan \"0\".\n\nATURAN KETAT OUTPUT:\n- WAJIB keluarkan HANYA objek JSON murni.\n- DILARANG memakai format markdown (seperti tanda blok kode).\n- DILARANG menambahkan kalimat sapaan, penjelasan, atau apapun selain JSON.\n\nFORMAT WAJIB:\n{\"name\": \"...\", \"phone\": \"...\", \"nicheInfo\": \"...\", \"value\": \"0\"}" },
+             { text: `SISTEM OCR TINGKAT TINGGI AKTIF. Kamu adalah agen AI khusus pembaca layar WhatsApp.
+TUGAS: Ekstrak data dari gambar ke JSON murni. 
+
+ATURAN VISUAL KETAT (DILARANG BERHALUSINASI!):
+1. "name": Wajib ambil teks PALING ATAS di Header (sebelah foto profil). Jika teks di sana adalah deretan angka (+62...), JADIKAN NOMOR ITU SEBAGAI NAMA. Jangan mengarang nama orang jika tidak tertulis!
+2. "phone": Ekstrak deretan angka (nomor HP) dari gambar. Bisa ada di header atau isi obrolan. Bersihkan karakter aneh.
+3. "nicheInfo": Baca kalimat obrolan masuk (pesan dari kiri/klien). Buat 1 kalimat ringkasan inti dari apa yang mereka cari/tanyakan.
+4. "value": Cari angka nominal uang/harga. Jika tidak ada, wajib isi 0.
+
+OUTPUT WAJIB HANYA JSON MURNI TANPA MARKDOWN \`\`\`json:
+{"name": "teks persis di header atas", "phone": "nomor hp", "nicheInfo": "ringkasan", "value": 0}` },
              { inlineData: { mimeType: file.type, data: base64Data } }
            ]
          }],
          generationConfig: {
-           temperature: 0.1,
+           temperature: 0.0,
            responseMimeType: "application/json"
          }
        };
@@ -1575,7 +1585,7 @@ const LeadFormModal = ({ appId, userId }) => {
 
           const form = document.getElementById('lead-form');
           if(form) {
-             let finalPhone = parsed.phone?.replace(/[^0-9]/g, '') || '';
+             let finalPhone = parsed.phone?.replace(/[^0-9+]/g, '') || '';
              let finalName = parsed.name?.trim();
              
              if (!finalName || finalName.toLowerCase() === 'tidak diketahui' || finalName === '-' || finalName.toLowerCase() === 'null') {
