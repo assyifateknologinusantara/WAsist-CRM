@@ -1515,7 +1515,7 @@ const LeadFormModal = ({ appId, userId }) => {
          contents: [{
            role: "user",
            parts: [
-             { text: "Ekstrak informasi dari screenshot WhatsApp ini menjadi JSON. WAJIB format: {\"name\": \"Nama\", \"phone\": \"Nomor HP\", \"nicheInfo\": \"Ringkasan pesan\", \"value\": \"0\"}. Semua value STRING. Jangan beri teks pengantar apapun." },
+             { text: "Ekstrak info dari screenshot WhatsApp ini menjadi JSON. ATURAN KETAT: 1. 'name': WAJIB ambil NAMA KONTAK yang tertera di bagian PALING ATAS layar obrolan (Header WhatsApp). Jika tidak ada nama, gunakan nomor HP. 2. 'phone': Ambil nomor HP/WA. 3. 'nicheInfo': Ringkasan inti pesan klien. 4. 'value': '0'. Format WAJIB: {\"name\": \"Nama Kontak Di Atas\", \"phone\": \"...\", \"nicheInfo\": \"...\", \"value\": \"0\"}. HANYA KELUARKAN JSON, tanpa awalan apapun." },
              { inlineData: { mimeType: file.type, data: base64Data } }
            ]
          }],
