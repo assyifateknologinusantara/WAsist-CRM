@@ -1484,6 +1484,13 @@ const LeadFormModal = ({ appId, userId }) => {
   const [loading, setLoading] = useState(false);
   const [smartPaste, setSmartPaste] = useState('');
   
+  // State untuk Custom API Key (Tersimpan di Browser LocalStorage)
+  const [customKey, setCustomKey] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('wasist_custom_apikey') || '';
+    return '';
+  });
+  const [showKeySetup, setShowKeySetup] = useState(false);
+  
   // State untuk ekstrak Gambar Screenshot via Vision AI
   const [aiProcessing, setAiProcessing] = useState(false);
   const [aiError, setAiError] = useState('');
@@ -1499,7 +1506,9 @@ const LeadFormModal = ({ appId, userId }) => {
     setExtractedData(null);
     try {
        const base64Data = base64Url.split(',')[1];
-       const apiKey = ""; // Kunci otomatis diinjeksi oleh lingkungan Canvas
+       const defaultEnvKey = ""; 
+       const apiKey = customKey.trim() || defaultEnvKey; 
+       
        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
        const payload = {
@@ -1591,9 +1600,9 @@ const LeadFormModal = ({ appId, userId }) => {
     } catch (err) {
        console.error("AI Error:", err);
        let errMsg = err.message;
-       // Deteksi error kehilangan API key saat dipreview
+       // Deteksi error API key
        if (errMsg.toLowerCase().includes('api key not valid')) {
-           errMsg = "API Key kosong/tidak valid. Server sedang membatasi request.";
+           errMsg = "API Key kosong/tidak valid. Silakan atur Key pribadi melalui ikon roda gigi di pojok kanan atas form ini.";
        }
        setAiError(`Gagal membaca: ${errMsg}`);
        setImagePreview(null);
@@ -1722,7 +1731,29 @@ const LeadFormModal = ({ appId, userId }) => {
               if(e.target.files && e.target.files[0]) processImageFile(e.target.files[0]);
            }} />
 
-           {aiProcessing ? (
+           {!aiProcessing && !imagePreview && !showKeySetup && (
+              <button type="button" onClick={(e) => { e.stopPropagation(); setShowKeySetup(true); }} className="absolute top-3 right-3 p-1.5 rounded-lg bg-white/50 text-blue-400 hover:text-blue-600 hover:bg-white shadow-sm transition-all z-10" title="Setup API Key Pribadi">
+                 <Settings className="w-5 h-5" />
+              </button>
+           )}
+
+           {showKeySetup ? (
+              <div className="p-5 text-left bg-white/90 rounded-2xl relative z-10" onClick={e => e.stopPropagation()}>
+                 <h4 className="font-bold text-slate-800 mb-2 flex items-center gap-2"><Settings className="w-4 h-4 text-blue-600"/> Pengaturan Gemini AI Key</h4>
+                 <p className="text-xs text-slate-500 mb-3 font-medium">Jika AI bawaan sistem selalu gagal/error, masukkan <span className="text-blue-600 font-bold">API Key Anda sendiri</span> yang dimulai dengan `AIzaSy...` di bawah ini.</p>
+                 <input
+                    type="text"
+                    value={customKey}
+                    onChange={e => setCustomKey(e.target.value)}
+                    placeholder="Contoh: AIzaSyB9bbdvKgz97ekMthrA0f2jP5xY..."
+                    className="w-full px-3 py-2 border border-blue-200 rounded-lg text-sm mb-4 focus:ring-2 focus:ring-blue-500 outline-none shadow-sm"
+                 />
+                 <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+                    <Button variant="ghost" onClick={() => setShowKeySetup(false)} className="py-1.5 px-3 text-xs font-bold border-slate-300">Tutup</Button>
+                    <Button variant="primary" onClick={() => { localStorage.setItem('wasist_custom_apikey', customKey); setShowKeySetup(false); setAiError(''); }} className="py-1.5 px-4 text-xs font-bold shadow-blue-200">Simpan Key</Button>
+                 </div>
+              </div>
+           ) : aiProcessing ? (
               <div className="flex flex-col items-center justify-center py-10 animate-in fade-in zoom-in-95">
                  <div className="relative">
                     <Loader2 className="w-12 h-12 text-blue-600 animate-spin mb-3" />
@@ -1771,7 +1802,7 @@ const LeadFormModal = ({ appId, userId }) => {
            )}
 
            {/* Fallback Input Manual Jika hanya ingin Ekstrak Teks Biasa */}
-           {!imagePreview && !aiProcessing && (
+           {!imagePreview && !aiProcessing && !showKeySetup && (
               <div className="px-5 pb-5 pt-0">
                  <textarea 
                     value={smartPaste} 
