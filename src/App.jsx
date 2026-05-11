@@ -1506,23 +1506,13 @@ const LeadFormModal = ({ appId, userId }) => {
          contents: [{
            role: "user",
            parts: [
-             { text: "Ekstrak informasi dari screenshot WhatsApp ini menjadi JSON. WAJIB format: {\"name\": \"Nama (atau Prospek Baru)\", \"phone\": \"Nomor HP saja\", \"nicheInfo\": \"Ringkasan pesan\", \"value\": \"0\"}. Semua value adalah STRING." },
+             { text: "Ekstrak informasi dari screenshot WhatsApp ini menjadi JSON. WAJIB format: {\"name\": \"Nama\", \"phone\": \"Nomor HP\", \"nicheInfo\": \"Ringkasan pesan\", \"value\": \"0\"}. Semua value STRING. Jangan beri teks pengantar apapun." },
              { inlineData: { mimeType: file.type, data: base64Data } }
            ]
          }],
          generationConfig: {
            temperature: 0.1,
-           responseMimeType: "application/json",
-           responseSchema: {
-             type: "OBJECT",
-             properties: {
-               name: { type: "STRING" },
-               phone: { type: "STRING" },
-               nicheInfo: { type: "STRING" },
-               value: { type: "STRING" }
-             },
-             required: ["name", "phone", "nicheInfo", "value"]
-           }
+           responseMimeType: "application/json"
          }
        };
 
@@ -1550,9 +1540,17 @@ const LeadFormModal = ({ appId, userId }) => {
           
           try {
               let cleaned = textRes.replace(/```json/gi, '').replace(/```/g, '').trim();
+              
+              // Super Recovery: Cari dan ekstrak paksa batas kurung kurawal JSON saja
+              const startIdx = cleaned.indexOf('{');
+              const endIdx = cleaned.lastIndexOf('}');
+              if (startIdx !== -1 && endIdx !== -1) {
+                  cleaned = cleaned.substring(startIdx, endIdx + 1);
+              }
+              
               parsed = JSON.parse(cleaned);
           } catch (e) {
-              console.warn("JSON Parse gagal, mencoba mode pemulihan. Teks asli:", textRes);
+              console.warn("JSON Parse gagal, mencoba mode pemulihan Regex. Teks asli:", textRes);
               const nameMatch = textRes.match(/"name"\s*:\s*"([^"]*)"/i);
               if(nameMatch) parsed.name = nameMatch[1];
               
@@ -1579,8 +1577,8 @@ const LeadFormModal = ({ appId, userId }) => {
              form.phone.value = finalPhone;
              form.nicheInfo.value = parsed.nicheInfo || '';
              
-             // Pastikan value adalah angka
-             let numericValue = parseInt(parsed.value?.replace(/[^0-9]/g, ''), 10);
+             // Pastikan value adalah angka yang sah
+             let numericValue = parseInt(parsed.value?.toString().replace(/[^0-9]/g, ''), 10);
              form.value.value = isNaN(numericValue) ? 0 : numericValue;
              
              form.notes.value = "Data ini diisi otomatis dari hasil ekstraksi cerdas gambar/screenshot WhatsApp.";
@@ -1592,7 +1590,12 @@ const LeadFormModal = ({ appId, userId }) => {
        }
     } catch (err) {
        console.error("AI Error:", err);
-       setAiError(`Gagal membaca: ${err.message}`);
+       let errMsg = err.message;
+       // Deteksi error kehilangan API key saat dipreview
+       if (errMsg.toLowerCase().includes('api key not valid')) {
+           errMsg = "API Key kosong/tidak valid. Server sedang membatasi request.";
+       }
+       setAiError(`Gagal membaca: ${errMsg}`);
        setImagePreview(null);
     } finally {
        setAiProcessing(false);
@@ -1653,6 +1656,21 @@ const LeadFormModal = ({ appId, userId }) => {
     }
 
     form.notes.value = "=== Ekstrak Teks Asli ===\n" + text;
+  };
+
+  const handleFillDummy = (e) => {
+    e.stopPropagation();
+    const form = document.getElementById('lead-form');
+    if(form) {
+       form.leadName.value = "Klien Simulasi (Bypass)";
+       form.phone.value = "081234567890";
+       form.value.value = 2500000;
+       form.nicheInfo.value = "Tertarik dengan produk yang ditawarkan";
+       form.notes.value = "Diisi menggunakan tombol Simulasi Bypass AI.";
+       
+       setExtractedData({ name: "Klien Simulasi (Bypass)", phone: "081234567890", nicheInfo: "Tertarik dengan produk yang ditawarkan" });
+    }
+    setAiError("");
   };
 
   const handleSubmit = async (e) => {
@@ -1741,7 +1759,14 @@ const LeadFormModal = ({ appId, userId }) => {
                  </div>
                  <p className="text-sm font-black text-blue-900 mb-1">Upload / Paste Screenshot WA</p>
                  <p className="text-xs text-blue-600 font-medium px-4">Tekan <kbd className="bg-white px-1.5 py-0.5 rounded shadow-sm text-slate-700">Ctrl+V</kbd> untuk menyalin gambar percakapan klien di sini. AI akan otomatis mengisi seluruh form.</p>
-                 {aiError && <p className="text-xs text-rose-600 font-bold mt-3 px-3 py-2 bg-rose-100 rounded-lg border border-rose-200 shadow-sm animate-pulse">{aiError}</p>}
+                 {aiError && (
+                    <div className="mt-3 flex flex-col items-center gap-2">
+                       <p className="text-xs text-rose-600 font-bold px-3 py-2 bg-rose-100 rounded-lg border border-rose-200 shadow-sm animate-pulse">{aiError}</p>
+                       <Button variant="outline" type="button" onClick={handleFillDummy} className="text-xs py-1.5 px-3 border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800" icon={Zap}>
+                          Bypass & Isi Data Simulasi
+                       </Button>
+                    </div>
+                 )}
               </div>
            )}
 
