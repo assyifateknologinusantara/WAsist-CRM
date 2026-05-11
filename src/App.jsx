@@ -1515,7 +1515,7 @@ const LeadFormModal = ({ appId, userId }) => {
          contents: [{
            role: "user",
            parts: [
-             { text: "Ekstrak info dari screenshot WhatsApp ini menjadi JSON. ATURAN KETAT: 1. 'name': WAJIB ambil NAMA KONTAK yang tertera di bagian PALING ATAS layar obrolan (Header WhatsApp). Jika tidak ada nama, gunakan nomor HP. 2. 'phone': Ambil nomor HP/WA. 3. 'nicheInfo': Ringkasan inti pesan klien. 4. 'value': '0'. Format WAJIB: {\"name\": \"Nama Kontak Di Atas\", \"phone\": \"...\", \"nicheInfo\": \"...\", \"value\": \"0\"}. HANYA KELUARKAN JSON, tanpa awalan apapun." },
+             { text: "Kamu adalah AI Agent ahli Data Entry CRM. Tugas utamamu adalah membaca screenshot WhatsApp ini dengan akurasi 100% dan mengekstraknya ke format JSON murni.\n\nANALISIS GAMBAR DENGAN TELITI:\n1. 'name': Fokus ke HEADER ATAS obrolan (sebelah foto profil). Salin teks persis di sana (nama kontak atau nomor jika belum disave).\n2. 'phone': Cari nomor telepon pengirim (+62/08...). Jika tidak ada di profil, cari di dalam isi chat. Jika tidak ada sama sekali, isi string kosong \"\".\n3. 'nicheInfo': Baca pesan klien secara mendalam. Apa yang mereka cari/tanyakan? Ringkas dalam 1 kalimat padat.\n4. 'value': Adakah nominal angka/harga/budget yang dibahas? Jika tidak ada, WAJIB isikan \"0\".\n\nATURAN KETAT OUTPUT:\n- WAJIB keluarkan HANYA objek JSON murni.\n- DILARANG memakai format markdown (seperti tanda blok kode).\n- DILARANG menambahkan kalimat sapaan, penjelasan, atau apapun selain JSON.\n\nFORMAT WAJIB:\n{\"name\": \"...\", \"phone\": \"...\", \"nicheInfo\": \"...\", \"value\": \"0\"}" },
              { inlineData: { mimeType: file.type, data: base64Data } }
            ]
          }],
@@ -1759,8 +1759,8 @@ const LeadFormModal = ({ appId, userId }) => {
                     <Loader2 className="w-12 h-12 text-blue-600 animate-spin mb-3" />
                     <Wand2 className="w-5 h-5 text-blue-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
                  </div>
-                 <p className="text-sm font-black text-blue-900 mt-2">Memindai Layar WhatsApp...</p>
-                 <p className="text-xs text-blue-600 font-medium">Sistem sedang membaca Nomor, Nama, dan Kebutuhan.</p>
+                 <p className="text-sm font-black text-blue-900 mt-2">Agent AI Membedah Obrolan...</p>
+                 <p className="text-xs text-blue-600 font-medium">Melakukan pemindaian presisi pada gambar Anda.</p>
               </div>
            ) : imagePreview ? (
               <div className="relative p-2 animate-in fade-in">
