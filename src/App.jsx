@@ -1482,26 +1482,36 @@ const LeadFormModal = ({ appId, userId }) => {
   // Visual Feedback Data Ekstrak
   const [extractedData, setExtractedData] = useState(null);
 
-  // Proses Ekstrak Menggunakan const apiKey (Google Gemini API via Frontend)
+  // Proses Ekstrak Menggunakan Google Gemini API via Frontend
   const extractImageWithGemini = async (file, base64Url) => {
     setAiProcessing(true);
     setAiError('');
     setExtractedData(null);
     try {
        const base64Data = base64Url.split(',')[1];
-       const apiKey = "AIzaSyB9bbdvKgz97ekMthrA0f2jP5xYOb1vc3Y"; // Disuntikkan pada saat runtime di Canvas environment
+       const apiKey = ""; // HARUS KOSONG. Environment Canvas yang akan menyuntikkan kuncinya saat runtime.
        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
        const payload = {
          contents: [{
            role: "user",
            parts: [
-             { text: "Ekstrak info dari gambar WA ini. WAJIB balas HANYA dengan format JSON murni tanpa tambahan teks/markdown apapun:\n{\n  \"name\": \"Nama di header/teks (jika tidak ada tulis Prospek Baru)\",\n  \"phone\": \"Nomor HP (hanya angka)\",\n  \"nicheInfo\": \"Apa kebutuhan/pertanyaannya\",\n  \"value\": \"Nominal angka jika ada (jika tidak ada tulis 0)\"\n}" },
+             { text: "Analisis screenshot WhatsApp ini. Ekstrak data pelanggan menjadi JSON." },
              { inlineData: { mimeType: file.type, data: base64Data } }
            ]
          }],
          generationConfig: {
-           temperature: 0.2
+           responseMimeType: "application/json",
+           responseSchema: {
+             type: "OBJECT",
+             properties: {
+               name: { type: "STRING", description: "Nama pelanggan dari header atau teks chat. Jika tidak ada, tulis Prospek Baru." },
+               phone: { type: "STRING", description: "Nomor WhatsApp pelanggan (hanya angka)." },
+               nicheInfo: { type: "STRING", description: "Ringkasan 1 kalimat tentang apa yang dibutuhkan atau ditanyakan pelanggan." },
+               value: { type: "INTEGER", description: "Nominal uang/budget yang disebutkan. Jika tidak ada, isi 0." }
+             },
+             required: ["name", "phone", "nicheInfo", "value"]
+           }
          }
        };
 
@@ -1518,27 +1528,22 @@ const LeadFormModal = ({ appId, userId }) => {
        let textRes = data.candidates?.[0]?.content?.parts?.[0]?.text;
        
        if(textRes) {
-          let parsed = { name: '', phone: '', nicheInfo: '', value: '0' };
+          let parsed = { name: '', phone: '', nicheInfo: '', value: 0 };
           
           try {
-              // Pembersihan teks ekstra
               let cleaned = textRes.replace(/```json/gi, '').replace(/```/g, '').trim();
               const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
               parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
           } catch (e) {
               console.warn("JSON Parse gagal, menggunakan mode pemulihan teks:", textRes);
-              // Fallback super aman jika AI memberikan format aneh / ada trailing comma
               const nameMatch = textRes.match(/"name"\s*:\s*"([^"]*)"/i);
               if(nameMatch) parsed.name = nameMatch[1];
-              
               const phoneMatch = textRes.match(/"phone"\s*:\s*"([^"]*)"/i);
               if(phoneMatch) parsed.phone = phoneMatch[1];
-              
               const nicheMatch = textRes.match(/"nicheInfo"\s*:\s*"([^"]*)"/i);
               if(nicheMatch) parsed.nicheInfo = nicheMatch[1];
-              
-              const valMatch = textRes.match(/"value"\s*:\s*"([^"]*)"/i);
-              if(valMatch) parsed.value = valMatch[1];
+              const valMatch = textRes.match(/"value"\s*:\s*([0-9]+)/i);
+              if(valMatch) parsed.value = parseInt(valMatch[1], 10);
           }
 
           const form = document.getElementById('lead-form');
@@ -1553,9 +1558,7 @@ const LeadFormModal = ({ appId, userId }) => {
              form.leadName.value = finalName;
              form.phone.value = finalPhone;
              form.nicheInfo.value = parsed.nicheInfo || '';
-             form.value.value = parsed.value ? parsed.value.replace(/[^0-9]/g, '') : 0;
-             if (!form.value.value) form.value.value = 0;
-             
+             form.value.value = parsed.value || 0;
              form.notes.value = "Data ini diisi otomatis dari hasil ekstraksi cerdas gambar/screenshot WhatsApp.";
              
              setExtractedData({ name: finalName, phone: finalPhone, nicheInfo: parsed.nicheInfo });
