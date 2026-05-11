@@ -37,7 +37,12 @@ const fetchWithRetry = async (url, options, retries = 5) => {
       if (!res.ok) {
         const text = await res.text();
         let errMsg = `HTTP ${res.status}`;
-        try { errMsg = JSON.parse(text).error?.message || errMsg; } catch(e) {}
+        try { 
+          const errObj = JSON.parse(text);
+          errMsg = errObj.error?.message || errMsg; 
+        } catch(e) {
+          errMsg = `${errMsg} - ${text.substring(0, 50)}`;
+        }
         throw new Error(errMsg);
       }
       return await res.json();
@@ -1494,20 +1499,30 @@ const LeadFormModal = ({ appId, userId }) => {
     setExtractedData(null);
     try {
        const base64Data = base64Url.split(',')[1];
-       const apiKey = ""; // Dibiarkan kosong agar Canvas menyuntikkan akses otomatis
+       const apiKey = ""; // Kunci otomatis diinjeksi oleh lingkungan Canvas
        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
        const payload = {
          contents: [{
            role: "user",
            parts: [
-             { text: "Ekstrak info dari gambar ini ke dalam JSON murni dengan format persis seperti ini: {\"name\": \"nama\", \"phone\": \"nomor\", \"nicheInfo\": \"kebutuhan\", \"value\": 0}. Jangan beri teks tambahan apapun." },
+             { text: "Ekstrak informasi dari screenshot WhatsApp ini menjadi JSON. WAJIB format: {\"name\": \"Nama (atau Prospek Baru)\", \"phone\": \"Nomor HP saja\", \"nicheInfo\": \"Ringkasan pesan\", \"value\": \"0\"}. Semua value adalah STRING." },
              { inlineData: { mimeType: file.type, data: base64Data } }
            ]
          }],
          generationConfig: {
            temperature: 0.1,
-           responseMimeType: "application/json"
+           responseMimeType: "application/json",
+           responseSchema: {
+             type: "OBJECT",
+             properties: {
+               name: { type: "STRING" },
+               phone: { type: "STRING" },
+               nicheInfo: { type: "STRING" },
+               value: { type: "STRING" }
+             },
+             required: ["name", "phone", "nicheInfo", "value"]
+           }
          }
        };
 
@@ -1518,24 +1533,26 @@ const LeadFormModal = ({ appId, userId }) => {
        });
 
        if (data.error) {
-           throw new Error(data.error.message || "API Error");
+           throw new Error(data.error.message || "Terjadi kesalahan pada Server AI.");
        }
 
-       let textRes = data.candidates?.[0]?.content?.parts?.[0]?.text;
+       const candidate = data.candidates?.[0];
+
+       // Penanganan Error Keselamatan (Safety Filter) dari Google Gemini
+       if (candidate?.finishReason && candidate.finishReason !== 'STOP') {
+           throw new Error(`Diblokir oleh sistem AI (Alasan: ${candidate.finishReason}). Foto mungkin terdeteksi mengandung info terlalu sensitif.`);
+       }
+
+       let textRes = candidate?.content?.parts?.[0]?.text;
        
        if(textRes) {
-          let parsed = { name: '', phone: '', nicheInfo: '', value: 0 };
+          let parsed = { name: '', phone: '', nicheInfo: '', value: '0' };
           
           try {
               let cleaned = textRes.replace(/```json/gi, '').replace(/```/g, '').trim();
-              const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-              if (jsonMatch) {
-                  parsed = JSON.parse(jsonMatch[0]);
-              } else {
-                  parsed = JSON.parse(cleaned);
-              }
+              parsed = JSON.parse(cleaned);
           } catch (e) {
-              console.warn("JSON Parse gagal, mode pemulihan diaktifkan. Teks:", textRes);
+              console.warn("JSON Parse gagal, mencoba mode pemulihan. Teks asli:", textRes);
               const nameMatch = textRes.match(/"name"\s*:\s*"([^"]*)"/i);
               if(nameMatch) parsed.name = nameMatch[1];
               
@@ -1545,8 +1562,8 @@ const LeadFormModal = ({ appId, userId }) => {
               const nicheMatch = textRes.match(/"nicheInfo"\s*:\s*"([^"]*)"/i);
               if(nicheMatch) parsed.nicheInfo = nicheMatch[1];
               
-              const valMatch = textRes.match(/"value"\s*:\s*"?([0-9]+)"?/i);
-              if(valMatch) parsed.value = parseInt(valMatch[1], 10);
+              const valMatch = textRes.match(/"value"\s*:\s*"([^"]*)"/i);
+              if(valMatch) parsed.value = valMatch[1];
           }
 
           const form = document.getElementById('lead-form');
@@ -1561,17 +1578,21 @@ const LeadFormModal = ({ appId, userId }) => {
              form.leadName.value = finalName;
              form.phone.value = finalPhone;
              form.nicheInfo.value = parsed.nicheInfo || '';
-             form.value.value = parsed.value || 0;
+             
+             // Pastikan value adalah angka
+             let numericValue = parseInt(parsed.value?.replace(/[^0-9]/g, ''), 10);
+             form.value.value = isNaN(numericValue) ? 0 : numericValue;
+             
              form.notes.value = "Data ini diisi otomatis dari hasil ekstraksi cerdas gambar/screenshot WhatsApp.";
              
              setExtractedData({ name: finalName, phone: finalPhone, nicheInfo: parsed.nicheInfo });
           }
        } else {
-          throw new Error("Respon AI tidak valid atau kosong.");
+          throw new Error("Respon AI tidak valid atau kosong. Coba gambar lain.");
        }
     } catch (err) {
        console.error("AI Error:", err);
-       setAiError(`Gagal mengekstrak: ${err.message}. Pastikan gambar jelas.`);
+       setAiError(`Gagal membaca: ${err.message}`);
        setImagePreview(null);
     } finally {
        setAiProcessing(false);
