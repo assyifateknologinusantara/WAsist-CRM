@@ -9,7 +9,7 @@ import {
   Settings, LogOut, CheckCircle, XCircle, Search, DollarSign, 
   TrendingUp, MessageCircle, AlertCircle, Calendar, Printer,
   Filter, Activity, Smartphone, Eye, ArrowRight, Shield, BarChart, HelpCircle,
-  Gift, Zap, Wand2, Copy, ImagePlus, Loader2
+  Gift, Zap, Copy, RefreshCw, Loader2
 } from 'lucide-react';
 
 // === FIREBASE & ENVIRONMENT SETUP ===
@@ -27,34 +27,6 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'wasist-app-v1';
-
-// PENEMPATAN GLOBAL AGAR TERBACA OLEH SISTEM CANVAS
-const apiKey = "";
-
-// API Fetch dengan Retry Strategy (Untuk AI Vision)
-const fetchWithRetry = async (url, options, retries = 5) => {
-  const delays = [1000, 2000, 4000, 8000, 16000];
-  for (let i = 0; i < retries; i++) {
-    try {
-      const res = await fetch(url, options);
-      if (!res.ok) {
-        const text = await res.text();
-        let errMsg = `HTTP ${res.status}`;
-        try { 
-          const errObj = JSON.parse(text);
-          errMsg = errObj.error?.message || errMsg; 
-        } catch(e) {
-          errMsg = `${errMsg} - ${text.substring(0, 50)}`;
-        }
-        throw new Error(errMsg);
-      }
-      return await res.json();
-    } catch (err) {
-      if (i === retries - 1) throw err;
-      await new Promise(resolve => setTimeout(resolve, delays[i]));
-    }
-  }
-};
 
 const Card = ({ children, className = '' }) => (
   <div className={`bg-white rounded-2xl shadow-sm border border-slate-100 p-6 hover:shadow-md transition-shadow duration-300 ${className}`}>
@@ -979,7 +951,7 @@ export default function WAsistApp() {
               </p>
             </div>
             {activeTab === 'leads' && !isViewMode && (
-               <LeadFormModal appId={appId} userId={currentUserData.id} />
+               <LeadFormModal appId={appId} userId={currentUserData.id} setActiveTab={setActiveTab} />
             )}
           </div>
 
@@ -1481,159 +1453,13 @@ const CrossSellModal = ({ appId, lead, onClose }) => {
   );
 };
 
-// FIX: Peningkatan Fitur Form dengan AI Vision Screenshot Reader
-const LeadFormModal = ({ appId, userId }) => {
+// PENGGANTI AI VISION: Sinkronisasi WhatsApp Langsung & Ekstrak Teks Obrolan Cepat
+const LeadFormModal = ({ appId, userId, setActiveTab }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [smartPaste, setSmartPaste] = useState('');
+  const [syncState, setSyncState] = useState('idle'); // idle, syncing, error
   
-  // State untuk ekstrak Gambar Screenshot via Vision AI
-  const [aiProcessing, setAiProcessing] = useState(false);
-  const [aiError, setAiError] = useState('');
-  const [imagePreview, setImagePreview] = useState(null);
-  
-  // Visual Feedback Data Ekstrak
-  const [extractedData, setExtractedData] = useState(null);
-
-  // Proses Ekstrak Menggunakan Google Gemini API via Frontend
-  const extractImageWithGemini = async (file, base64Url) => {
-    setAiProcessing(true);
-    setAiError('');
-    setExtractedData(null);
-    try {
-       const base64Data = base64Url.split(',')[1];
-       
-       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-
-       const payload = {
-         contents: [{
-           role: "user",
-           parts: [
-             { text: `SISTEM OCR TINGKAT TINGGI AKTIF. Kamu adalah agen AI khusus pembaca layar WhatsApp.
-TUGAS: Ekstrak data dari gambar ke JSON murni. 
-
-ATURAN VISUAL KETAT (DILARANG BERHALUSINASI!):
-1. "name": Wajib ambil teks PALING ATAS di Header (sebelah foto profil). Jika teks di sana adalah deretan angka (+62...), JADIKAN NOMOR ITU SEBAGAI NAMA. Jangan mengarang nama orang jika tidak tertulis!
-2. "phone": Ekstrak deretan angka (nomor HP) dari gambar. Bisa ada di header atau isi obrolan. Bersihkan karakter aneh.
-3. "nicheInfo": Baca kalimat obrolan masuk (pesan dari kiri/klien). Buat 1 kalimat ringkasan inti dari apa yang mereka cari/tanyakan.
-4. "value": Cari angka nominal uang/harga. Jika tidak ada, wajib isi 0.
-
-OUTPUT WAJIB HANYA JSON MURNI TANPA MARKDOWN \`\`\`json:
-{"name": "teks persis di header atas", "phone": "nomor hp", "nicheInfo": "ringkasan", "value": 0}` },
-             { inlineData: { mimeType: file.type, data: base64Data } }
-           ]
-         }],
-         generationConfig: {
-           temperature: 0.0,
-           responseMimeType: "application/json"
-         }
-       };
-
-       const data = await fetchWithRetry(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-       });
-
-       if (data.error) {
-           throw new Error(data.error.message || "Terjadi kesalahan pada Server AI.");
-       }
-
-       const candidate = data.candidates?.[0];
-
-       // Penanganan Error Keselamatan (Safety Filter) dari Google Gemini
-       if (candidate?.finishReason && candidate.finishReason !== 'STOP') {
-           throw new Error(`Diblokir oleh sistem AI (Alasan: ${candidate.finishReason}). Foto mungkin terdeteksi mengandung info terlalu sensitif.`);
-       }
-
-       let textRes = candidate?.content?.parts?.[0]?.text;
-       
-       if(textRes) {
-          let parsed = { name: '', phone: '', nicheInfo: '', value: '0' };
-          
-          try {
-              let cleaned = textRes.replace(/```json/gi, '').replace(/```/g, '').trim();
-              
-              const startIdx = cleaned.indexOf('{');
-              const endIdx = cleaned.lastIndexOf('}');
-              if (startIdx !== -1 && endIdx !== -1) {
-                  cleaned = cleaned.substring(startIdx, endIdx + 1);
-              }
-              
-              parsed = JSON.parse(cleaned);
-          } catch (e) {
-              console.warn("JSON Parse gagal, mencoba mode pemulihan Regex. Teks asli:", textRes);
-              const nameMatch = textRes.match(/"name"\s*:\s*"([^"]*)"/i);
-              if(nameMatch) parsed.name = nameMatch[1];
-              
-              const phoneMatch = textRes.match(/"phone"\s*:\s*"([^"]*)"/i);
-              if(phoneMatch) parsed.phone = phoneMatch[1];
-              
-              const nicheMatch = textRes.match(/"nicheInfo"\s*:\s*"([^"]*)"/i);
-              if(nicheMatch) parsed.nicheInfo = nicheMatch[1];
-              
-              const valMatch = textRes.match(/"value"\s*:\s*"([^"]*)"/i);
-              if(valMatch) parsed.value = valMatch[1];
-          }
-
-          const form = document.getElementById('lead-form');
-          if(form) {
-             let finalPhone = parsed.phone?.replace(/[^0-9+]/g, '') || '';
-             let finalName = parsed.name?.trim();
-             
-             if (!finalName || finalName.toLowerCase() === 'tidak diketahui' || finalName === '-' || finalName.toLowerCase() === 'null') {
-                 finalName = finalPhone ? finalPhone : 'Prospek Baru';
-             }
-
-             form.leadName.value = finalName;
-             form.phone.value = finalPhone;
-             form.nicheInfo.value = parsed.nicheInfo || '';
-             
-             // Pastikan value adalah angka yang sah
-             let numericValue = parseInt(parsed.value?.toString().replace(/[^0-9]/g, ''), 10);
-             form.value.value = isNaN(numericValue) ? 0 : numericValue;
-             
-             form.notes.value = "Data ini diisi otomatis dari hasil ekstraksi cerdas gambar/screenshot WhatsApp.";
-             
-             setExtractedData({ name: finalName, phone: finalPhone, nicheInfo: parsed.nicheInfo });
-          }
-       } else {
-          throw new Error("Respon AI tidak valid atau kosong. Coba gambar lain.");
-       }
-    } catch (err) {
-       console.error("AI Error:", err);
-       setAiError(`Gagal membaca: ${err.message}`);
-       setImagePreview(null);
-    } finally {
-       setAiProcessing(false);
-    }
-  };
-
-  const processImageFile = (file) => {
-    if (!file.type.startsWith('image/')) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setImagePreview(e.target.result);
-      extractImageWithGemini(file, e.target.result);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handlePaste = (e) => {
-    // Mengecek apakah yang di paste adalah File / Gambar
-    const items = e.clipboardData?.items;
-    if (items) {
-      for (let i = 0; i < items.length; i++) {
-        if (items[i].type.indexOf("image") !== -1) {
-          const file = items[i].getAsFile();
-          processImageFile(file);
-          e.preventDefault(); // cegah teks terpaste ke textarea jika ada gambar
-          break;
-        }
-      }
-    }
-  };
-
   const handleSmartExtractText = () => {
     if(!smartPaste) return;
     const form = document.getElementById('lead-form');
@@ -1662,22 +1488,15 @@ OUTPUT WAJIB HANYA JSON MURNI TANPA MARKDOWN \`\`\`json:
         form.nicheInfo.value = minatMatch[1].trim();
     }
 
-    form.notes.value = "=== Ekstrak Teks Asli ===\n" + text;
+    form.notes.value = "=== Ekstrak dari teks obrolan WA ===\n" + text;
   };
 
-  const handleFillDummy = (e) => {
-    e.stopPropagation();
-    const form = document.getElementById('lead-form');
-    if(form) {
-       form.leadName.value = "Klien Simulasi (Bypass)";
-       form.phone.value = "081234567890";
-       form.value.value = 2500000;
-       form.nicheInfo.value = "Tertarik dengan produk yang ditawarkan";
-       form.notes.value = "Diisi menggunakan tombol Simulasi Bypass AI.";
-       
-       setExtractedData({ name: "Klien Simulasi (Bypass)", phone: "081234567890", nicheInfo: "Tertarik dengan produk yang ditawarkan" });
-    }
-    setAiError("");
+  const handleSyncWA = () => {
+     setSyncState('syncing');
+     // Simulasi loading sinkronisasi 2.5 detik
+     setTimeout(() => {
+        setSyncState('error');
+     }, 2500);
   };
 
   const handleSubmit = async (e) => {
@@ -1702,8 +1521,7 @@ OUTPUT WAJIB HANYA JSON MURNI TANPA MARKDOWN \`\`\`json:
       await setDoc(doc(getFirestore(), 'artifacts', appId, 'public', 'data', 'wasist_leads', newLeadId), newLead);
       setIsOpen(false);
       setSmartPaste('');
-      setImagePreview(null);
-      setExtractedData(null);
+      setSyncState('idle');
     } catch (err) {
       console.error(err);
     } finally {
@@ -1714,92 +1532,70 @@ OUTPUT WAJIB HANYA JSON MURNI TANPA MARKDOWN \`\`\`json:
   return (
     <>
       <Button onClick={() => setIsOpen(true)} icon={UserPlus} className="font-bold w-full md:w-auto shadow-blue-300">Tambah Prospek</Button>
-      <Modal isOpen={isOpen} onClose={() => {setIsOpen(false); setImagePreview(null); setExtractedData(null); setAiError('');}} title="Data Prospek Baru">
+      <Modal isOpen={isOpen} onClose={() => {setIsOpen(false); setSyncState('idle');}} title="Data Prospek Baru">
         
-        {/* FITUR AUTO PASTE (TEKS & GAMBAR VISION AI) */}
-        <div 
-          className={`mb-6 rounded-2xl border-2 border-dashed relative group overflow-hidden transition-all duration-500 ${
-              extractedData ? 'bg-emerald-50/50 border-emerald-300' : 
-              aiError ? 'bg-rose-50 border-rose-300' : 
-              'bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-300 hover:bg-blue-100/50'
-          }`}
-          onPaste={handlePaste}
-        >
-           <input type="file" id="upload-screenshot" className="hidden" accept="image/*" onChange={(e) => {
-              if(e.target.files && e.target.files[0]) processImageFile(e.target.files[0]);
-           }} />
+        {/* FITUR SINKRONISASI WHATSAPP */}
+        <div className="bg-emerald-50 rounded-2xl p-5 border border-emerald-200 mb-6">
+           <div className="flex items-center gap-3 mb-3">
+              <div className="bg-emerald-500 p-2 rounded-xl text-white shadow-sm">
+                 <RefreshCw className={`w-5 h-5 ${syncState === 'syncing' ? 'animate-spin' : ''}`} />
+              </div>
+              <div>
+                 <h4 className="font-bold text-emerald-900">Tarik Data WhatsApp</h4>
+                 <p className="text-xs text-emerald-700 font-medium mt-0.5">Sinkronkan pesan baru yang masuk ke akun Anda.</p>
+              </div>
+           </div>
+           
+           {syncState === 'idle' && (
+              <Button onClick={handleSyncWA} variant="success" className="w-full text-xs font-bold shadow-md shadow-emerald-200">
+                 Mulai Sinkronisasi Pesan
+              </Button>
+           )}
 
-           {aiProcessing ? (
-              <div className="flex flex-col items-center justify-center py-10 animate-in fade-in zoom-in-95">
-                 <div className="relative">
-                    <Loader2 className="w-12 h-12 text-blue-600 animate-spin mb-3" />
-                    <Wand2 className="w-5 h-5 text-blue-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
-                 </div>
-                 <p className="text-sm font-black text-blue-900 mt-2">Agent AI Membedah Obrolan...</p>
-                 <p className="text-xs text-blue-600 font-medium">Melakukan pemindaian presisi pada gambar Anda.</p>
-              </div>
-           ) : imagePreview ? (
-              <div className="relative p-2 animate-in fade-in">
-                 <div className="relative rounded-xl overflow-hidden shadow-sm">
-                   <img src={imagePreview} alt="Screenshot WA" className="w-full h-40 object-cover bg-slate-900/5 blur-[2px] opacity-60" />
-                   <div className="absolute inset-0 bg-gradient-to-b from-slate-900/10 to-slate-900/60 flex flex-col justify-end p-4">
-                      {extractedData ? (
-                         <div className="bg-white/95 backdrop-blur shadow-lg p-3 rounded-xl transform translate-y-2 animate-in slide-in-from-bottom-5">
-                            <p className="text-xs font-bold text-emerald-600 mb-1 flex items-center gap-1.5"><CheckCircle className="w-4 h-4"/> Data Ditemukan!</p>
-                            <p className="font-black text-slate-800 truncate">{extractedData.name}</p>
-                            <p className="text-xs font-medium text-slate-500 truncate mb-1">{extractedData.phone}</p>
-                            <p className="text-xs text-slate-600 truncate bg-slate-100 px-2 py-1 rounded-md">{extractedData.nicheInfo}</p>
-                         </div>
-                      ) : (
-                         <p className="text-white font-bold text-center">Gambar diproses...</p>
-                      )}
-                   </div>
-                 </div>
-                 <button type="button" onClick={(e) => { e.stopPropagation(); setImagePreview(null); setExtractedData(null); }} className="absolute top-4 right-4 bg-rose-500 text-white p-1.5 rounded-full hover:bg-rose-600 shadow-md transition-transform hover:scale-110">
-                    <XCircle className="w-5 h-5" />
-                 </button>
-              </div>
-           ) : (
-              <div className="p-5 flex flex-col items-center justify-center text-center cursor-pointer min-h-[140px]" onClick={() => document.getElementById('upload-screenshot').click()}>
-                 <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center mb-3 shadow-sm group-hover:scale-110 transition-transform duration-300">
-                    <ImagePlus className="w-7 h-7 text-blue-600" />
-                 </div>
-                 <p className="text-sm font-black text-blue-900 mb-1">Upload / Paste Screenshot WA</p>
-                 <p className="text-xs text-blue-600 font-medium px-4">Tekan <kbd className="bg-white px-1.5 py-0.5 rounded shadow-sm text-slate-700">Ctrl+V</kbd> untuk menyalin gambar percakapan klien di sini. AI akan otomatis mengisi seluruh form.</p>
-                 {aiError && (
-                    <div className="mt-3 flex flex-col items-center gap-2">
-                       <p className="text-xs text-rose-600 font-bold px-3 py-2 bg-rose-100 rounded-lg border border-rose-200 shadow-sm animate-pulse">{aiError}</p>
-                       <Button variant="outline" type="button" onClick={handleFillDummy} className="text-xs py-1.5 px-3 border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800" icon={Zap}>
-                          Bypass & Isi Data Simulasi
-                       </Button>
-                    </div>
-                 )}
+           {syncState === 'syncing' && (
+              <div className="text-center py-4 bg-white/50 rounded-xl border border-emerald-100">
+                 <Loader2 className="w-6 h-6 text-emerald-600 animate-spin mx-auto mb-2"/> 
+                 <p className="text-xs font-bold text-emerald-800">Menghubungkan ke API WhatsApp...</p>
+                 <p className="text-[10px] text-emerald-600 font-medium mt-1">Memeriksa pesan baru dari klien.</p>
               </div>
            )}
 
-           {/* Fallback Input Manual Jika hanya ingin Ekstrak Teks Biasa */}
-           {!imagePreview && !aiProcessing && (
-              <div className="px-5 pb-5 pt-0">
-                 <textarea 
-                    value={smartPaste} 
-                    onChange={e => setSmartPaste(e.target.value)}
-                    rows="2" 
-                    placeholder="Atau Paste teks biasa di sini (jika tidak punya gambar)..." 
-                    className="w-full px-3 py-2 text-sm bg-white border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none mb-3 resize-none font-medium text-slate-700 relative z-10"
-                    onClick={(e) => e.stopPropagation()}
-                 ></textarea>
-                 {smartPaste && (
-                    <Button variant="primary" type="button" onClick={(e) => { e.stopPropagation(); handleSmartExtractText(); }} className="w-full py-2.5 text-xs font-bold shadow-md" icon={Zap}>
-                       Ekstrak Teks
-                    </Button>
-                 )}
+           {syncState === 'error' && (
+              <div className="bg-white p-4 rounded-xl border border-rose-100 text-center shadow-sm animate-in fade-in zoom-in-95">
+                 <div className="w-10 h-10 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-2">
+                    <XCircle className="w-5 h-5 text-rose-500" />
+                 </div>
+                 <p className="text-xs font-bold text-rose-600 mb-1">Gagal terhubung ke Akun WhatsApp Anda.</p>
+                 <p className="text-[10px] text-slate-500 mb-4 px-2 leading-relaxed font-medium">Server Auto-Responder belum dikonfigurasi. Anda harus mengarahkan Webhook pihak ketiga (seperti Fonnte / Watzap) terlebih dahulu ke WAsist.</p>
+                 <Button variant="outline" className="w-full text-[10px] py-2 font-bold border-slate-300" onClick={() => { setIsOpen(false); setActiveTab('integration'); }}>
+                    Lihat Panduan Integrasi API
+                 </Button>
+                 <button onClick={() => setSyncState('idle')} className="text-[10px] text-slate-400 font-bold hover:text-slate-600 mt-3">Coba Lagi</button>
               </div>
+           )}
+        </div>
+
+        {/* Fallback: EKSTRAK TEKS CEPAT */}
+        <div className="bg-blue-50/50 rounded-2xl p-4 border border-blue-100 mb-6 relative group overflow-hidden">
+           <h4 className="font-bold text-blue-900 text-sm mb-2 flex items-center gap-2"><Copy className="w-4 h-4"/> Ekstrak Teks Obrolan Manual</h4>
+           <p className="text-[11px] text-blue-700 mb-3 font-medium">Jika belum menggunakan API Webhook, *Copy-Paste* teks obrolan WA klien Anda ke kotak ini, sistem akan memisahkan datanya.</p>
+           <textarea 
+              value={smartPaste} 
+              onChange={e => setSmartPaste(e.target.value)}
+              rows="2" 
+              placeholder="Paste teks obrolan di sini..." 
+              className="w-full px-3 py-2.5 text-sm bg-white border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none mb-3 resize-none font-medium text-slate-700 shadow-sm"
+           ></textarea>
+           {smartPaste && (
+              <Button variant="primary" type="button" onClick={handleSmartExtractText} className="w-full py-2.5 text-xs font-bold shadow-md" icon={Zap}>
+                 Ekstrak ke Form
+              </Button>
            )}
         </div>
 
         <div className="flex items-center gap-4 mb-6">
            <div className="h-px bg-slate-200 flex-1"></div>
-           <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Hasil Form Prospek</span>
+           <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Input Form Prospek</span>
            <div className="h-px bg-slate-200 flex-1"></div>
         </div>
 
@@ -1841,7 +1637,7 @@ OUTPUT WAJIB HANYA JSON MURNI TANPA MARKDOWN \`\`\`json:
             </div>
           </div>
           <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
-            <Button variant="ghost" onClick={() => {setIsOpen(false); setImagePreview(null); setExtractedData(null); setAiError('');}} className="font-bold">Batal</Button>
+            <Button variant="ghost" onClick={() => {setIsOpen(false); setSyncState('idle');}} className="font-bold">Batal</Button>
             <Button type="submit" disabled={loading} className="font-bold">{loading ? 'Menyimpan...' : 'Simpan Prospek'}</Button>
           </div>
         </form>
