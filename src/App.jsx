@@ -1482,14 +1482,14 @@ const LeadFormModal = ({ appId, userId }) => {
   // Visual Feedback Data Ekstrak
   const [extractedData, setExtractedData] = useState(null);
 
-  // Proses Ekstrak Menggunakan AI Vision (Google Gemini API via Frontend)
+  // Proses Ekstrak Menggunakan const apiKey (Google Gemini API via Frontend)
   const extractImageWithGemini = async (file, base64Url) => {
     setAiProcessing(true);
     setAiError('');
     setExtractedData(null);
     try {
        const base64Data = base64Url.split(',')[1];
-       const apiKey = ""; // Disuntikkan pada saat runtime di Canvas environment
+       const apiKey = "AIzaSyB9bbdvKgz97ekMthrA0f2jP5xYOb1vc3Y"; // Disuntikkan pada saat runtime di Canvas environment
        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
        const payload = {
