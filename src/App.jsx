@@ -1496,22 +1496,12 @@ const LeadFormModal = ({ appId, userId }) => {
          contents: [{
            role: "user",
            parts: [
-             { text: "Ekstrak informasi dari screenshot obrolan WhatsApp ini.\n\nATURAN:\n1. 'name': Nama kontak di header atas. Jika tidak ada/berupa nomor, tulis 'Prospek Baru'.\n2. 'phone': Nomor HP klien (bersihkan hanya angka). Jika tidak ada, kosongkan.\n3. 'nicheInfo': Kebutuhan/pertanyaan klien (1 kalimat pendek).\n4. 'value': Nominal harga/budget jika disebut. Jika tidak, isi '0'." },
+             { text: "Ekstrak info dari gambar WA ini. WAJIB balas HANYA dengan format JSON murni tanpa tambahan teks/markdown apapun:\n{\n  \"name\": \"Nama di header/teks (jika tidak ada tulis Prospek Baru)\",\n  \"phone\": \"Nomor HP (hanya angka)\",\n  \"nicheInfo\": \"Apa kebutuhan/pertanyaannya\",\n  \"value\": \"Nominal angka jika ada (jika tidak ada tulis 0)\"\n}" },
              { inlineData: { mimeType: file.type, data: base64Data } }
            ]
          }],
          generationConfig: {
-           responseMimeType: "application/json",
-           responseSchema: {
-             type: "OBJECT",
-             properties: {
-               phone: { type: "STRING" },
-               name: { type: "STRING" },
-               nicheInfo: { type: "STRING" },
-               value: { type: "STRING" }
-             },
-             required: ["phone", "name", "nicheInfo", "value"]
-           }
+           temperature: 0.2
          }
        };
 
@@ -1528,18 +1518,27 @@ const LeadFormModal = ({ appId, userId }) => {
        let textRes = data.candidates?.[0]?.content?.parts?.[0]?.text;
        
        if(textRes) {
-          // PEMBERSIHAN EKSTREM: Menangkap objek JSON meskipun API membalas dengan markdown/teks awalan
-          textRes = textRes.replace(/```json/gi, '').replace(/```/g, '').trim();
-          let parsed;
+          let parsed = { name: '', phone: '', nicheInfo: '', value: '0' };
+          
           try {
-              parsed = JSON.parse(textRes);
+              // Pembersihan teks ekstra
+              let cleaned = textRes.replace(/```json/gi, '').replace(/```/g, '').trim();
+              const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+              parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
           } catch (e) {
-              const jsonMatch = textRes.match(/\{[\s\S]*\}/);
-              if (jsonMatch) {
-                  parsed = JSON.parse(jsonMatch[0]);
-              } else {
-                  throw new Error("Format balasan AI bukan JSON yang valid.");
-              }
+              console.warn("JSON Parse gagal, menggunakan mode pemulihan teks:", textRes);
+              // Fallback super aman jika AI memberikan format aneh / ada trailing comma
+              const nameMatch = textRes.match(/"name"\s*:\s*"([^"]*)"/i);
+              if(nameMatch) parsed.name = nameMatch[1];
+              
+              const phoneMatch = textRes.match(/"phone"\s*:\s*"([^"]*)"/i);
+              if(phoneMatch) parsed.phone = phoneMatch[1];
+              
+              const nicheMatch = textRes.match(/"nicheInfo"\s*:\s*"([^"]*)"/i);
+              if(nicheMatch) parsed.nicheInfo = nicheMatch[1];
+              
+              const valMatch = textRes.match(/"value"\s*:\s*"([^"]*)"/i);
+              if(valMatch) parsed.value = valMatch[1];
           }
 
           const form = document.getElementById('lead-form');
@@ -1562,11 +1561,11 @@ const LeadFormModal = ({ appId, userId }) => {
              setExtractedData({ name: finalName, phone: finalPhone, nicheInfo: parsed.nicheInfo });
           }
        } else {
-          throw new Error("Respon AI kosong atau format tidak dikenali.");
+          throw new Error("Respon AI kosong.");
        }
     } catch (err) {
        console.error("AI Error:", err);
-       setAiError(`Gagal membaca: ${err.message}. Pastikan file jelas & ukurannya wajar.`);
+       setAiError(`Gagal membaca: ${err.message}`);
        setImagePreview(null);
     } finally {
        setAiProcessing(false);
