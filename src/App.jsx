@@ -1229,27 +1229,49 @@ export default function WAsistApp() {
                         <Zap className="text-blue-600 w-8 h-8" />
                       </div>
                       <div>
-                        <h2 className="text-2xl font-black text-slate-800">API Webhook & Automasi WA</h2>
-                        <p className="text-sm text-slate-500 font-medium mt-1">Sambungkan sistem CRM dengan bot otomatis (Make, Fonnte, Zapier, Wati).</p>
+                        <h2 className="text-2xl font-black text-slate-800">Panduan Integrasi Webhook</h2>
+                        <p className="text-sm text-slate-500 font-medium mt-1">Hubungkan bot WA (Fonnte/Watzap) ke CRM ini via Make.com.</p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="space-y-6 text-slate-700">
+                  <div className="space-y-8 text-slate-700">
                     <div className="bg-blue-50 p-5 rounded-2xl border border-blue-100 flex gap-3 items-start">
                       <Activity className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
                       <p className="text-sm font-medium leading-relaxed">
-                        Anda dapat membangun sistem <strong>Auto-Save Data</strong> agar setiap chat WhatsApp yang masuk dari prospek baru dapat langsung tertulis di Database Leads tanpa Anda harus membuka aplikasi. Gunakan integrasi pihak ketiga untuk melakukan request POST langsung ke Firebase Database milik Anda.
+                        Sistem WAsist menggunakan <strong>Google Cloud Firestore</strong> sebagai database. Untuk memasukkan data secara otomatis dari WhatsApp (seperti Webhook Fonnte), gunakan layanan perantara otomatisasi <strong>Make.com (gratis)</strong> untuk menangkap Webhook dan meneruskannya ke database aplikasi ini.
                       </p>
                     </div>
 
-                    <div>
-                      <h3 className="font-black text-slate-800 mb-3 flex items-center gap-2"><Settings className="w-4 h-4"/> Parameter Koneksi Database</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Langkah 1 */}
+                    <div className="relative pl-8 md:pl-0">
+                       <div className="hidden md:block absolute left-[-24px] top-0 bottom-0 w-0.5 bg-blue-100"></div>
+                       <div className="hidden md:flex absolute left-[-31.5px] top-0 w-4 h-4 rounded-full bg-blue-500 border-4 border-white items-center justify-center"></div>
+                       <h3 className="font-black text-slate-800 mb-3 flex items-center gap-2"><span className="md:hidden inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-600 text-xs">1</span> Tangkap Webhook dengan Make.com</h3>
+                       <p className="text-sm text-slate-600 mb-4">Daftar ke <strong>Make.com</strong> dan buat Skenario baru. Pilih modul pertama: <strong>Webhooks -&gt; Custom Webhook</strong>. Make.com akan memberikan sebuah URL. <strong>Salin URL tersebut dan paste ke kolom Webhook di Fonnte Anda</strong>.</p>
+                    </div>
+
+                    {/* Langkah 2 */}
+                    <div className="relative pl-8 md:pl-0">
+                       <div className="hidden md:block absolute left-[-24px] top-0 bottom-0 w-0.5 bg-blue-100"></div>
+                       <div className="hidden md:flex absolute left-[-31.5px] top-0 w-4 h-4 rounded-full bg-blue-500 border-4 border-white items-center justify-center"></div>
+                       <h3 className="font-black text-slate-800 mb-3 flex items-center gap-2"><span className="md:hidden inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-600 text-xs">2</span> Sambungkan ke Database CRM</h3>
+                       <p className="text-sm text-slate-600 mb-4">Tambahkan modul kedua di Make.com, pilih <strong>Google Cloud Firestore -&gt; Create a Document</strong>. Make akan meminta izin koneksi ke Google, lalu gunakan parameter berikut untuk memastikan data masuk ke akun CRM Anda:</p>
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                          
                          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 group">
                            <div className="flex justify-between items-start mb-2">
-                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Firestore Collection Path</p>
+                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Project ID Firestore</p>
+                             <button onClick={() => executeCopy('wasist-crm', 'projId')} className="text-slate-400 hover:text-blue-600 transition-colors" title="Salin">
+                               {copyStatus === 'projId' ? <CheckCircle className="w-4 h-4 text-emerald-500"/> : <Copy className="w-4 h-4"/>}
+                             </button>
+                           </div>
+                           <code className="text-sm font-bold text-blue-600 block break-all font-mono">wasist-crm</code>
+                         </div>
+
+                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 group">
+                           <div className="flex justify-between items-start mb-2">
+                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Collection Path</p>
                              <button onClick={() => executeCopy(`artifacts/${appId}/public/data/wasist_leads`, 'path')} className="text-slate-400 hover:text-blue-600 transition-colors" title="Salin">
                                {copyStatus === 'path' ? <CheckCircle className="w-4 h-4 text-emerald-500"/> : <Copy className="w-4 h-4"/>}
                              </button>
@@ -1257,35 +1279,28 @@ export default function WAsistApp() {
                            <code className="text-xs font-bold text-blue-600 block break-all font-mono">artifacts/{appId}/public/data/wasist_leads</code>
                          </div>
 
-                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 group">
-                           <div className="flex justify-between items-start mb-2">
-                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">User ID Anda (Pemilik Akses)</p>
-                             <button onClick={() => executeCopy(currentUserData.id, 'id')} className="text-slate-400 hover:text-blue-600 transition-colors" title="Salin">
-                               {copyStatus === 'id' ? <CheckCircle className="w-4 h-4 text-emerald-500"/> : <Copy className="w-4 h-4"/>}
-                             </button>
-                           </div>
-                           <code className="text-xs font-bold text-blue-600 block break-all font-mono">{currentUserData.id}</code>
-                         </div>
-
-                      </div>
+                       </div>
                     </div>
 
-                    <div>
-                       <h3 className="font-black text-slate-800 mb-3 flex items-center gap-2"><Code className="w-4 h-4"/> Contoh JSON Payload (Body)</h3>
-                       <p className="text-xs font-medium text-slate-500 mb-3">Kirimkan format JSON berikut melalui HTTP Request POST (Firestore REST API) / Zapier Firebase Action.</p>
+                    {/* Langkah 3 */}
+                    <div className="relative pl-8 md:pl-0">
+                       <div className="hidden md:flex absolute left-[-31.5px] top-0 w-4 h-4 rounded-full bg-blue-500 border-4 border-white items-center justify-center"></div>
+                       <h3 className="font-black text-slate-800 mb-3 flex items-center gap-2"><span className="md:hidden inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-600 text-xs">3</span> Mapping Data Fonnte ke CRM</h3>
+                       <p className="text-sm text-slate-600 mb-3">Di bagian <strong>Document Content</strong> pada pengaturan Firestore di Make.com, isikan variabel yang ditarik dari pesan Fonnte (misal: <code>sender</code>, <code>message</code>) agar sesuai dengan struktur database Anda:</p>
                        <div className="bg-slate-900 text-emerald-400 p-5 rounded-2xl font-mono text-xs overflow-x-auto border border-slate-800 shadow-inner">
 <pre>{`{
-  "userId": "${currentUserData.id}",
-  "name": "{{Variable_Nama_WA}}",
-  "phone": "{{Variable_Nomor_WA}}",
+  "userId": "${currentUserData.id}", // WAJIB COPY KODE INI (ID ANDA)
+  "name": "{{Nama Pengirim Fonnte}}",
+  "phone": "{{Nomor WA Pengirim Fonnte}}",
   "status": "New",
   "value": 0,
-  "followUpDate": "2026-05-15",
-  "nicheInfo": "{{Variable_Pesan_Awal}}",
-  "notes": "Diinput otomatis dari API Bot WA",
-  "createdAt": ${Date.now()}
+  "followUpDate": "",
+  "nicheInfo": "{{Pesan dari Fonnte}}",
+  "notes": "Data ditarik otomatis dari Fonnte",
+  "createdAt": {{now}} // Timestamp dari Make.com
 }`}</pre>
                        </div>
+                       <p className="text-[11px] text-slate-500 mt-4 font-medium italic">* Catatan: Pastikan Anda menggunakan Firebase Service Account jika diminta login oleh Make.com, atau aktifkan webhook public Firebase jika Anda menggunakan platform lain.</p>
                     </div>
                   </div>
                </Card>
