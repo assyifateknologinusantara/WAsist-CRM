@@ -34,7 +34,12 @@ const fetchWithRetry = async (url, options, retries = 5) => {
   for (let i = 0; i < retries; i++) {
     try {
       const res = await fetch(url, options);
-      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      if (!res.ok) {
+        const text = await res.text();
+        let errMsg = `HTTP ${res.status}`;
+        try { errMsg = JSON.parse(text).error?.message || errMsg; } catch(e) {}
+        throw new Error(errMsg);
+      }
       return await res.json();
     } catch (err) {
       if (i === retries - 1) throw err;
@@ -1489,29 +1494,20 @@ const LeadFormModal = ({ appId, userId }) => {
     setExtractedData(null);
     try {
        const base64Data = base64Url.split(',')[1];
-       const apiKey = ""; // HARUS KOSONG. Environment Canvas yang akan menyuntikkan kuncinya saat runtime.
+       const apiKey = ""; // Dibiarkan kosong agar Canvas menyuntikkan akses otomatis
        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
        const payload = {
          contents: [{
            role: "user",
            parts: [
-             { text: "Analisis screenshot WhatsApp ini. Ekstrak data pelanggan menjadi JSON." },
+             { text: "Ekstrak info dari gambar ini ke dalam JSON murni dengan format persis seperti ini: {\"name\": \"nama\", \"phone\": \"nomor\", \"nicheInfo\": \"kebutuhan\", \"value\": 0}. Jangan beri teks tambahan apapun." },
              { inlineData: { mimeType: file.type, data: base64Data } }
            ]
          }],
          generationConfig: {
-           responseMimeType: "application/json",
-           responseSchema: {
-             type: "OBJECT",
-             properties: {
-               name: { type: "STRING", description: "Nama pelanggan dari header atau teks chat. Jika tidak ada, tulis Prospek Baru." },
-               phone: { type: "STRING", description: "Nomor WhatsApp pelanggan (hanya angka)." },
-               nicheInfo: { type: "STRING", description: "Ringkasan 1 kalimat tentang apa yang dibutuhkan atau ditanyakan pelanggan." },
-               value: { type: "INTEGER", description: "Nominal uang/budget yang disebutkan. Jika tidak ada, isi 0." }
-             },
-             required: ["name", "phone", "nicheInfo", "value"]
-           }
+           temperature: 0.1,
+           responseMimeType: "application/json"
          }
        };
 
@@ -1533,16 +1529,23 @@ const LeadFormModal = ({ appId, userId }) => {
           try {
               let cleaned = textRes.replace(/```json/gi, '').replace(/```/g, '').trim();
               const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-              parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
+              if (jsonMatch) {
+                  parsed = JSON.parse(jsonMatch[0]);
+              } else {
+                  parsed = JSON.parse(cleaned);
+              }
           } catch (e) {
-              console.warn("JSON Parse gagal, menggunakan mode pemulihan teks:", textRes);
+              console.warn("JSON Parse gagal, mode pemulihan diaktifkan. Teks:", textRes);
               const nameMatch = textRes.match(/"name"\s*:\s*"([^"]*)"/i);
               if(nameMatch) parsed.name = nameMatch[1];
+              
               const phoneMatch = textRes.match(/"phone"\s*:\s*"([^"]*)"/i);
               if(phoneMatch) parsed.phone = phoneMatch[1];
+              
               const nicheMatch = textRes.match(/"nicheInfo"\s*:\s*"([^"]*)"/i);
               if(nicheMatch) parsed.nicheInfo = nicheMatch[1];
-              const valMatch = textRes.match(/"value"\s*:\s*([0-9]+)/i);
+              
+              const valMatch = textRes.match(/"value"\s*:\s*"?([0-9]+)"?/i);
               if(valMatch) parsed.value = parseInt(valMatch[1], 10);
           }
 
@@ -1564,11 +1567,11 @@ const LeadFormModal = ({ appId, userId }) => {
              setExtractedData({ name: finalName, phone: finalPhone, nicheInfo: parsed.nicheInfo });
           }
        } else {
-          throw new Error("Respon AI kosong.");
+          throw new Error("Respon AI tidak valid atau kosong.");
        }
     } catch (err) {
        console.error("AI Error:", err);
-       setAiError(`Gagal membaca: ${err.message}`);
+       setAiError(`Gagal mengekstrak: ${err.message}. Pastikan gambar jelas.`);
        setImagePreview(null);
     } finally {
        setAiProcessing(false);
